@@ -158,3 +158,4 @@ estado = {
 ## 6. Historial de cambios del plan
 
 | 2026-11-08 | Las migraciones del spec 01 (A) y la base de la API del spec 02 (B, PR #4) se empezaron antes de spec-v1, y el PR #4 se unió a main antes de etiquetar por error. A partir de spec-v1, todo el código entra por spec aprobado y PR revisado. |
+| 2026-11-08 | L4 (sección 6 de la especificación) se aclaró después de spec-v1: el coordinador puede editar los pacientes disponibles (sin asesor), además de los de su equipo. Se decidió al implementar el spec 05. |

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
@@ -23,6 +24,12 @@ Route::middleware(['auth', 'panel'])->group(function () {
     // El perfil solo cambia la contraseña (PUT /password, en routes/auth.php).
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
 
+    // Pacientes (spec 05): administrador y coordinador. Cada acción busca con
+    // Cliente::visiblePara(), así que lo ajeno responde 404.
+    Route::middleware('rol:administrador,supervisor')->group(function () {
+        Route::resource('clientes', ClienteController::class)->except(['destroy']);
+    });
+
     // Solo el administrador. Sin show ni destroy: las cuentas no se borran.
     Route::middleware('rol:administrador')->group(function () {
         Route::resource('cuentas', CuentaController::class)
@@ -33,6 +40,9 @@ Route::middleware(['auth', 'panel'])->group(function () {
         Route::resource('productos', ProductoController::class)->except(['show', 'destroy']);
         Route::patch('productos/{producto}/estado', [ProductoController::class, 'cambiarEstado'])
             ->name('productos.estado');
+
+        // Eliminar pacientes (spec 05): solo el administrador; el coordinador recibe 403.
+        Route::delete('clientes/{cliente}', [ClienteController::class, 'destroy'])->name('clientes.destroy');
     });
 });
 

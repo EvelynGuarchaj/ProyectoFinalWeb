@@ -17,6 +17,16 @@ class Oportunidad extends Model
     /** Todas las etapas, en orden. "negociacion" va sin tilde. */
     public const ETAPAS = ['prospecto', 'calificado', 'propuesta', 'negociacion', 'ganada', 'perdida'];
 
+    /** Etapa => nombre en pantalla (vocabulario dental, sección 1.3). */
+    public const ETAPAS_EN_PANTALLA = [
+        'prospecto' => 'Interesado',
+        'calificado' => 'Evaluado',
+        'propuesta' => 'Presupuesto enviado',
+        'negociacion' => 'En negociación',
+        'ganada' => 'Aceptado',
+        'perdida' => 'Rechazado',
+    ];
+
     /** Etapas abiertas: las que cuentan para el pronóstico. */
     public const ABIERTAS = ['prospecto', 'calificado', 'propuesta', 'negociacion'];
 

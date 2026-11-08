@@ -30,6 +30,19 @@ _Base cargada con `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo 
 | L3 · "Plan avanzado" a Q3,000.00: "Renovación de planes" sigue con 2 × Q2,600.00 y total Q5,650.00; cifras de control sin cambio | Sin observers sobre `Producto` (`git grep -nE "Observer\|::updated\|::saved\|observe\(" laravel/app laravel/bootstrap` vacío); `ProductosTest::test_ca6_cambiar_un_precio_no_cambia_el_pasado` (9250.00 / 22450.00 / 2512.88 / 6751.13 antes y después) | Cumple |
 | L3 · No hay ruta ni botón para borrar tratamientos | `routes/web.php:33` (`except(['show', 'destroy'])`); `php artisan route:list --path=productos` sin DELETE; `ProductosTest::test_ca8_no_hay_ruta_ni_boton_para_borrar` (405) | Cumple |
 | R-P9 · Alicia marca "Requiere evaluación" → `requiere_evaluacion = 1`; un coordinador no puede abrir el formulario | `ProductoRequest.php:36`, `productos/form.blade.php` (input oculto `0` + casilla `1`); `ProductosTest::test_ca9_marcar_y_desmarcar_requiere_evaluacion`, `test_ca10_el_coordinador_no_edita_tratamientos`. A mano: Alicia → Tratamientos → Editar "Plan básico" → marcar → Guardar → `SELECT requiere_evaluacion FROM productos WHERE nombre='Plan básico'` → 1; Sergio en `/productos/1/edit` → 403 | Pendiente: falta la comprobación a mano |
+| L4 · Alicia ve 21 pacientes; "Sin asignar" → 6; filtro "Iván Toj" → solo Hotel Los Pinos | `ClienteController.php:23-57`, `Cliente.php:26` (`visiblePara`); `ClientesTest::test_ca3_*` (4 pruebas, también 15 + 6 por página y CF / "Disponible") | Cumple |
+| L4 · Sergio ve 11 (3 de Valeria, 2 de Diego, 6 disponibles), no ve Abarrotes San Juan y su filtro solo ofrece a Valeria y Diego | `Cliente.php:26-41`, `ClienteController.php:162-168`; `ClientesTest::test_ca4_*` (4 pruebas, también `?asesor=<Carlos>` → lista vacía) | Cumple |
+| L4 · Buscar `4521817-k` y `quetzal` muestra Comercial El Quetzal | `ClienteController.php:37-45` (nombre "contiene" y NIT compactado con `Nit::normalizar`, comodines escapados); `ClientesTest::test_ca5_*` (3 pruebas) | Cumple |
+| L4 · Alta con NIT `4521817-k` o teléfono `+502 5555-1234`: vuelve con lo escrito y el mensaje de repetido junto al campo | `ClienteRequest.php:78-106` (`after()` con el valor normalizado); `ClientesTest::test_ca7_*` | Cumple |
+| L4 · Alta con NIT `4521817-1` y teléfono `1234-5678`: mensaje junto a cada campo, lo escrito se conserva | `Rules/NitValido.php`, `Rules/TelefonoValido.php`; `ClientesTest::test_ca8_*` | Cumple |
+| L4 · "Paciente Prueba" con NIT `cf` y teléfono `(502) 7761.9999` → `nit = NULL`, `telefono = '77619999'`, `vendedor_id = NULL`; la lista muestra "CF" y "Disponible" | `ClienteRequest.php:111-121` (`datos()`); `ClientesTest::test_ca9_*`; `SELECT nit, telefono, vendedor_id FROM clientes WHERE nombre='Paciente Prueba'` | Cumple |
+| L4 · Cada entrada de la sección 10 en el alta del panel se guarda o se rechaza como dice la tabla | `Support/Nit.php`, `Support/Telefono.php`; `ClientesTest::test_ca10_seccion_10_en_el_alta` (12 casos) | Cumple |
+| L4 · Repetido que se cuela entre la validación y el `INSERT` (1062): error junto al campo, nunca página de error | `ClienteController.php:146-158`; `ClientesTest::test_ca15_*` (al crear y al editar) | Cumple |
+| L4 · Alicia elimina Café Zunil; Ferretería Xela muestra "No se puede eliminar: el paciente tiene planes de tratamiento." | `ClienteController.php:120-139` (también 1451 por carrera); `ClientesTest::test_ca16_*` (5 pruebas, también solo planes cerrados y actividades en cascada). Falta ver que no aparece en `GET /clientes/disponibles` (spec 06) | Parcial: falta la parte de la API |
+| L4 · Sergio envía a mano `DELETE` de Café Zunil → 403 y el paciente sigue | `routes/web.php:45` (grupo `rol:administrador`); `ClientesTest::test_ca17_*`; `php artisan route:list --path=clientes -v` (DELETE solo con `rol:administrador`) | Cumple |
+| L4 · Asignar, reasignar y liberar; asesor al crear | Spec 07 | Pendiente |
+| L7 · Alta de paciente vacía: mensajes en español junto a cada campo; correo `no-es-correo` → "Escriba un correo válido." con el resto conservado | `ClienteRequest.php:43-71`; `ClientesTest::test_ca11_*` (5 pruebas). La paginación de la lista aún sale en inglés hasta el spec 16 | Cumple para el formulario de pacientes |
+| Sección 10 · NIT y teléfono en el panel | `NitTest` y `TelefonoTest` (sección 10 + bordes, funciones y reglas); falta comparar con `src/util/nit.js` y `telefono.js` (spec 06) | Parcial: falta la API |
 
 ### 2.2 API (B)
 
@@ -52,6 +65,8 @@ _Base cargada con `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo 
 
 | Regla | Prueba | Resultado |
 |---|---|---|
+| S5 · Sergio abre a mano el detalle o la edición de Abarrotes San Juan (de Carlos) o envía el `PUT` directamente → 404, sin cambios | `ClienteController.php` (`visiblePara(...)->findOrFail()` en show, edit, update y destroy), `ClienteRequest.php:32-38` (404 antes de validar); `ClientesTest::test_ca6_*` (también `PATCH`, datos incompletos e id inexistente) | Cumple |
+| S7 · Paciente con nombre `<img src=x onerror=alert(1)>` se ve literal en la lista, el detalle y la edición del panel | Vistas `clientes/` solo con `{{ }}` (`git grep -n "{!!" laravel/resources/views/clientes` vacío); `ClientesTest::test_ca19_el_nombre_se_muestra_literal`. Falta asignarlo a Valeria (spec 07) y la parte de la SPA | Parcial: panel cumple |
 
 ### 3.2 Pruebas de B
 
