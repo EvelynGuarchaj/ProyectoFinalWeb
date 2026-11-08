@@ -1,6 +1,7 @@
 // Base de la SPA: rutas por hash, layout, render y delegación de eventos (docs/plan.md §3).
 import { estado, cambiar, suscribir } from './estado.js';
 import { escapar, mostrarError } from './util.js';
+import { leerSesion } from './sesion.js';
 import login from './vistas/login.js';
 import cartera from './vistas/cartera.js';
 import embudo from './vistas/embudo.js';
@@ -110,6 +111,13 @@ function render() {
   const vista = VISTAS[estado.ruta];
   app.innerHTML = `${barra()}${indicador()}
     <main class="container py-3">${avisoHtml()}${vista.render(estado)}</main>`;
+
+  // Mientras haya peticiones en curso, no se puede volver a enviar un formulario.
+  if (estado.cargando > 0) {
+    for (const boton of app.querySelectorAll('button[type="submit"]')) {
+      boton.disabled = true;
+    }
+  }
 }
 
 // ---------- Delegación de eventos ----------
@@ -122,6 +130,11 @@ function propia(objeto, nombre) {
 const ACCIONES_GLOBALES = {
   cerrarAviso() {
     cambiar({ aviso: null });
+  },
+  // Vuelve a pedir los datos de la vista activa (aviso de API apagada).
+  async reintentar() {
+    cambiar({ aviso: null });
+    await VISTAS[estado.ruta].cargar(estado.params);
   }
 };
 
@@ -155,5 +168,6 @@ app.addEventListener('submit', async (evento) => {
 // ---------- Arranque ----------
 
 suscribir(render);
+cambiar({ sesion: leerSesion() });
 window.addEventListener('hashchange', navegar);
 navegar();
