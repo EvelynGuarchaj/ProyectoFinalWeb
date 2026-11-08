@@ -126,9 +126,9 @@ Orden de las comprobaciones:
 1. `ensureIsNotRateLimited()` (Breeze). Mensaje: "Demasiados intentos. Intente de nuevo en :seconds segundos."
 2. `Auth::attempt(...)`. Si falla → `RateLimiter::hit` y error en `email`: **"El correo o la contraseña no son correctos."** (el mismo para correo inexistente y contraseña incorrecta).
 3. Con la contraseña correcta, se lee `Auth::user()`:
-   - si `rol = 'vendedor'` → `Auth::guard('web')->logout()` y error en `email`: **"Esta cuenta es de asesor. Ingrese desde la aplicación de asesores."**
-   - si `activo = 0` → `logout()` y error en `email`: **"Su cuenta está desactivada. Comuníquese con el administrador."**
-   - (si un vendedor además está desactivado, gana el mensaje de asesor: es el primero que se comprueba.)
+   - si `activo = 0` → `Auth::guard('web')->logout()` y error en `email`: **"Su cuenta está desactivada. Comuníquese con el administrador."**
+   - si `rol = 'vendedor'` → `logout()` y error en `email`: **"Esta cuenta es de asesor. Ingrese desde la aplicación de asesores."**
+   - (si un vendedor además está desactivado, gana el mensaje de cuenta desactivada: es el primero que se comprueba. Así Iván ve lo mismo que en la API y se cumple CA15.)
 4. `RateLimiter::clear` y sigue el flujo de Breeze (regenera la sesión y va a `dashboard`).
 
 `messages()`: `email.required` → "Escriba su correo.", `email.email` → "Escriba un correo válido.", `password.required` → "Escriba su contraseña.".
@@ -235,6 +235,7 @@ Salen de los Dado/Cuando/Entonces de L2. Semilla: `php artisan migrate:fresh --s
 |---|---|---|
 | Mensaje de asesor: "Esta cuenta es de asesor. Ingrese desde la aplicación de asesores." | "Su cuenta es de asesor. Ingrese desde la aplicación del asesor." (propuesta inicial) | La especificación (L2) manda; elegido por la integrante para no cambiarla |
 | Comprobar rol y estado en `LoginRequest` después de `Auth::attempt` y cerrar sesión | Agregar `rol` y `activo` a las credenciales de `attempt` | Con las credenciales extra el asesor y la cuenta desactivada verían "correo o contraseña incorrectos"; L2 pide mensajes distintos solo con la contraseña correcta, igual que la API |
+| Comprobar `activo` antes que el rol | Comprobar primero el rol (versión inicial de la sección 2.4) | Iván es asesor y está desactivado; L2 y CA15 piden el mensaje de cuenta desactivada, igual que la API |
 | Middleware `CuentaPanel` que vuelve a leer al usuario en cada petición | Confiar en la sesión | La sesión guarda al usuario de cuando entró; sin releer, una cuenta desactivada seguiría dentro (sección 1.2). El nombre sigue `docs/plan.md` (en `docs/reparto.md` aparece como `SoloPanel`) |
 | Mensaje de cuenta desactivada también cuando la cuenta pasó a `vendedor` | Un mensaje distinto para el cambio de rol | L2 lo dice así ("con el mensaje de cuenta desactivada") |
 | `Rol` responde 403 | 404 | Es una sección que su rol no usa, no un dato ajeno (L2 lo distingue de S5) |

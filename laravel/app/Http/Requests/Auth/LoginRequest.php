@@ -34,6 +34,18 @@ class LoginRequest extends FormRequest
     }
 
     /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'email.required' => 'Escriba su correo.',
+            'email.email' => 'Escriba un correo válido.',
+            'password.required' => 'Escriba su contraseña.',
+        ];
+    }
+
+    /**
      * Attempt to authenticate the request's credentials.
      *
      * @throws ValidationException
@@ -46,8 +58,25 @@ class LoginRequest extends FormRequest
             RateLimiter::hit($this->throttleKey());
 
             throw ValidationException::withMessages([
-                'email' => trans('auth.failed'),
+                'email' => 'El correo o la contraseña no son correctos.',
             ]);
+        }
+
+        // Con la contraseña correcta, se revisa la puerta (L2). Primero el
+        // estado: una cuenta desactivada ve ese mensaje aunque sea de asesor,
+        // igual que en la API.
+        $usuario = Auth::user();
+        $rechazo = match (true) {
+            ! $usuario->activo => 'Su cuenta está desactivada. Comuníquese con el administrador.',
+            $usuario->esVendedor() => 'Esta cuenta es de asesor. Ingrese desde la aplicación de asesores.',
+            default => null,
+        };
+
+        if ($rechazo !== null) {
+            // logout() también olvida la cookie de "Recordarme".
+            Auth::guard('web')->logout();
+
+            throw ValidationException::withMessages(['email' => $rechazo]);
         }
 
         RateLimiter::clear($this->throttleKey());
@@ -69,10 +98,7 @@ class LoginRequest extends FormRequest
         $seconds = RateLimiter::availableIn($this->throttleKey());
 
         throw ValidationException::withMessages([
-            'email' => trans('auth.throttle', [
-                'seconds' => $seconds,
-                'minutes' => ceil($seconds / 60),
-            ]),
+            'email' => "Demasiados intentos. Intente de nuevo en {$seconds} segundos.",
         ]);
     }
 
