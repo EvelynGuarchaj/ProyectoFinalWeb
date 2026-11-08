@@ -32,6 +32,7 @@ class CuentaRequest extends FormRequest
         $cuenta = $this->cuenta();
 
         $supervisor = [
+            'bail',
             'exclude_unless:rol,vendedor',
             'required',
             'integer',
@@ -43,12 +44,12 @@ class CuentaRequest extends FormRequest
         }
 
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($cuenta)],
-            'password' => [$cuenta ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
-            'rol' => ['required', Rule::in(array_keys(User::ROLES))],
+            'name' => ['bail', 'required', 'string', 'max:255'],
+            'email' => ['bail', 'required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($cuenta)],
+            'password' => ['bail', $cuenta ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
+            'rol' => ['bail', 'required', Rule::in(array_keys(User::ROLES))],
             'supervisor_id' => $supervisor,
-            'activo' => ['required', 'boolean'],
+            'activo' => ['bail', 'required', 'boolean'],
         ];
     }
 
