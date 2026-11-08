@@ -284,22 +284,483 @@ Un CHECK de MySQL solo ve la fila que se escribe; no puede consultar otras filas
 
 ## 4. Contrato de la API
 <!-- Responsable: B -->
-_Pendiente._
+### 4.1 Reglas generales
+
+- **Base:** `http://localhost:3000/api`. Todo viaja en JSON, también los errores. Nunca se responde HTML.
+- **Autenticación:** todas las rutas exigen `Authorization: Bearer <token>`, salvo `POST /auth/login`.
+- **Dueño:** el asesor dueño de todo sale del token (`req.usuario.id`), nunca del cuerpo. Los campos que el contrato no lista (por ejemplo `vendedor_id`, `etapa` al crear o `precio_unitario`) se **ignoran** (sección 5).
+- **Fechas:** viajan en ISO 8601 y en UTC con milisegundos (`2026-10-05T16:00:00.000Z`). Una fecha que llega sin zona horaria se rechaza con 422.
+- **Montos:** viajan como números JSON (`9250`, no `"9250.00"`). Los totales los calcula el servidor en SQL.
+- **NIT:** se guarda compacto o `NULL` para consumidor final; la API devuelve `NULL` como `"CF"`.
+- **Llaves internas:** ninguna respuesta trae `password`, `vendedor_id`, `user_id`, `supervisor_id` ni `usuario_id`.
+- **`:id` inválido:** un `:id` o `:lineaId` que no es un entero positivo responde **404**, igual que uno que no existe.
+
+### 4.2 Códigos y mensajes generales
+
+| Código | Cuándo | Cuerpo |
+|---|---|---|
+| 400 | JSON mal formado | `{ "error": "El cuerpo de la petición no es JSON válido." }` |
+| 400 | Falta el cuerpo en un POST o PATCH que lo necesita | `{ "error": "Falta el cuerpo de la petición." }` |
+| 400 | Un filtro con un valor que no existe (`?estado`, `?etapa`, `?mes`) | `{ "error": "<mensaje del filtro>" }` |
+| 401 | Falta el token | `{ "error": "Falta el token de acceso." }` |
+| 401 | Token alterado, vencido o firmado con otro algoritmo | `{ "error": "El token no es válido o ya venció." }` |
+| 401 | La cuenta del token ya no existe, está desactivada o ya no es asesor | `{ "error": "Su cuenta ya no tiene acceso. Ingrese de nuevo." }` |
+| 404 | El recurso no existe o es de otro asesor | `{ "error": "No se encontró el recurso." }` |
+| 404 | Ruta inexistente | `{ "error": "Ruta no encontrada." }` |
+| 409 | La petición choca con el estado actual | `{ "error": "<mensaje>" }` |
+| 422 | Los datos violan una regla | `{ "errores": { "<campo>": "<mensaje>" } }`, un mensaje por campo, en español y tratando de usted |
+| 500 | Error inesperado | `{ "error": "Ocurrió un error inesperado. Intente de nuevo más tarde." }`; el detalle queda solo en la consola del servidor |
+
+### 4.3 Formas de las respuestas
+
+**Cliente**
+```json
+{ "id": 1, "nombre": "Comercial El Quetzal", "nit": "4521817K",
+  "telefono": "55551234", "correo": "compras@elquetzal.test" }
+```
+
+**Actividad** (`vencida` se calcula al responder: no completada y `vence_en` ya pasó)
+```json
+{ "id": 2, "cliente": { "id": 2, "nombre": "Ferretería Xela" },
+  "tipo": "tarea", "descripcion": "Enviar propuesta de capacitación",
+  "vence_en": "2030-01-15T15:00:00.000Z", "completada": false, "vencida": false }
+```
+
+**Oportunidad, detalle** (el resumen de la lista es igual pero sin `productos` ni `historial`)
+```json
+{
+  "id": 1,
+  "cliente": { "id": 1, "nombre": "Comercial El Quetzal" },
+  "titulo": "Renovación de planes",
+  "etapa": "ganada",
+  "probabilidad": 100,
+  "total": 5650,
+  "fecha_cierre": "2026-10-05T16:00:00.000Z",
+  "motivo_perdida": null,
+  "productos": [
+    { "id": 1, "producto_id": 2, "nombre": "Plan avanzado",
+      "cantidad": 2, "precio_unitario": 2600, "subtotal": 5200 }
+  ],
+  "historial": [
+    { "etapa_anterior": null, "etapa_nueva": "prospecto",
+      "usuario": "Valeria López", "fecha": "2026-09-23T16:00:00.000Z" }
+  ]
+}
+```
+`probabilidad` sale de la etapa: prospecto 10, calificado 25, propuesta 50, negociacion 75, ganada 100, perdida 0. `productos[].id` es el id de la línea (`:lineaId`).
+
+**Resumen del mes**
+```json
+{ "mes": "2026-10", "ventas": 2, "total": 9250, "pronostico": 2512.88,
+  "cartera": { "clientes": 3, "maximo": 10 } }
+```
+
+### 4.4 Endpoints
+
+#### `POST /auth/login`
+Cuerpo: `{ correo, clave }`. Sin token.
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 200 | Asesor activo con la contraseña correcta | `{ token, usuario: { id, nombre, correo } }` |
+| 422 | Falta `correo` o `clave`, o vienen vacíos | `{ "errores": { "correo": "Escriba su correo.", "clave": "Escriba su contraseña." } }` |
+| 401 | Correo inexistente **o** contraseña incorrecta (respuesta idéntica en los dos casos) | `{ "error": "Correo o contraseña incorrectos." }` |
+| 403 | Contraseña correcta, pero la cuenta es de administrador o supervisor | `{ "error": "Esta cuenta no es de asesor. Use el panel de la clínica." }` |
+| 403 | Contraseña correcta, pero el asesor está desactivado | `{ "error": "Su cuenta está desactivada. Comuníquese con el administrador." }` |
+
+El token es un JWT HS256 con el id del usuario en `sub` y la expiración de `JWT_EXPIRA` (`.env`). Con 403 no se entrega token.
+
+#### `GET /productos`
+Respuesta 200: tratamientos activos ordenados por nombre, `[{ id, nombre, precio, requiere_evaluacion }]`. `requiere_evaluacion` es booleano (capa de sector, sección 2).
+
+#### `GET /clientes?q=`
+Respuesta 200: los clientes de su cartera, ordenados por nombre. `q` es opcional y busca "contiene" en el nombre o en el NIT (el texto de `q` se compacta igual que un NIT para comparar contra el NIT).
+
+#### `POST /clientes`
+Cuerpo: `{ nombre, nit, telefono, correo? }`.
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 201 | Datos válidos y cartera con espacio | El cliente, ya en su cartera |
+| 422 | `nombre` vacío o de más de 150 caracteres | `"nombre": "Escriba el nombre del paciente (máximo 150 caracteres)."` |
+| 422 | NIT inválido (ni NIT válido con verificador ni CF) | `"nit": "Escriba un NIT válido (con su dígito verificador) o CF."` |
+| 422 | Teléfono inválido después de normalizarlo | `"telefono": "Escriba un teléfono de Guatemala de 8 dígitos."` |
+| 422 | Correo con formato inválido | `"correo": "Escriba un correo válido."` |
+| 409 | NIT repetido (ya normalizado) | `{ "error": "Ya existe un paciente con ese NIT." }` |
+| 409 | Teléfono repetido (ya normalizado) | `{ "error": "Ya existe un paciente con ese teléfono." }` |
+| 409 | Su cartera ya tiene 10 | `{ "error": "Su cartera ya tiene 10 pacientes, el máximo permitido." }` |
+
+Normalización de NIT y teléfono: sección 10.
+
+#### `GET /clientes/disponibles`
+Respuesta 200: `[{ id, nombre }]` de los clientes sin vendedor. Sin NIT, teléfono ni correo.
+
+#### `POST /clientes/:id/tomar`
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 200 | El cliente estaba disponible y la cartera tiene espacio | El cliente, ya en su cartera |
+| 404 | El cliente no existe | `{ error }` |
+| 409 | El cliente ya tiene vendedor (aunque sea otro asesor) | `{ "error": "Este paciente ya no está disponible." }` |
+| 409 | Su cartera ya tiene 10 | `{ "error": "Su cartera ya tiene 10 pacientes, el máximo permitido." }` |
+
+Es atómico: si varios lo piden a la vez, exactamente uno recibe 200 (sección 9, S8).
+
+#### `GET /clientes/:id`
+200 con el cliente; 404 si no es de su cartera.
+
+#### `PATCH /clientes/:id`
+Cuerpo: solo los campos que cambian, de entre `nombre`, `nit`, `telefono` y `correo` (`correo` `null` o `""` lo borra).
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 200 | Cambios válidos | El cliente actualizado |
+| 400 | No trae ninguno de los cuatro campos | `{ "error": "No envió ningún campo para cambiar." }` |
+| 404 | No es de su cartera | `{ error }` |
+| 409 / 422 | Igual que en `POST /clientes` (el repetido no cuenta al propio cliente) | |
+
+#### `POST /clientes/:id/actividades`
+Cuerpo: `{ tipo, descripcion, vence_en? }`.
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 201 | Datos válidos | La actividad |
+| 404 | El cliente no es de su cartera | `{ error }` |
+| 422 | `tipo` no es `llamada`, `reunion` ni `tarea` | `"tipo": "Elija el tipo: llamada, reunion o tarea."` |
+| 422 | `descripcion` vacía o de más de 500 caracteres | `"descripcion": "Escriba la descripción (máximo 500 caracteres)."` |
+| 422 | `vence_en` sin zona horaria o con una fecha que no existe | `"vence_en": "Escriba la fecha en ISO 8601 con zona horaria, por ejemplo 2026-12-01T10:00:00-06:00."` |
+
+`vence_en` con zona se guarda en UTC: `2026-12-01T10:00:00-06:00` se devuelve como `2026-12-01T16:00:00.000Z`.
+
+#### `GET /actividades?estado=`
+Respuesta 200: actividades de los clientes de **su cartera** (no de quien las registró). Sin `estado`, todas; `pendiente` → no completadas; `completada` → completadas. Otro valor → 400 `"El filtro estado debe ser pendiente o completada."`. Orden: primero las que tienen fecha, por `vence_en` ascendente; después las sin fecha.
+
+#### `PATCH /actividades/:id`
+Cuerpo: `{ completada }`. 200 con la actividad; 404 si no es de un cliente de su cartera; 422 `"completada": "Indique true o false."` si no es booleano.
+
+#### `GET /oportunidades?etapa=`
+Respuesta 200: el resumen de sus oportunidades, de la más reciente a la más antigua. `etapa` es opcional; un valor que no es una de las seis etapas → 400 `"El filtro etapa no es válido."`.
+
+#### `POST /oportunidades`
+Cuerpo: `{ cliente_id, titulo }`.
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 201 | Datos válidos | El detalle, en `prospecto`, con su registro de creación en el historial (`etapa_anterior: null`) |
+| 422 | `cliente_id` no es un paciente de su cartera | `"cliente_id": "Elija un paciente de su cartera."` |
+| 422 | `titulo` vacío o de más de 150 caracteres | `"titulo": "Escriba el título (máximo 150 caracteres)."` |
+
+#### `GET /oportunidades/:id`
+200 con el detalle; 404 si no es suya.
+
+#### `PATCH /oportunidades/:id`
+Cuerpo: `{ titulo }`. 200 con el detalle; 404 si no es suya; 409 `"El plan ya está cerrado y no se puede modificar."` si está en `ganada` o `perdida`; 422 en `titulo` como al crear.
+
+#### `PATCH /oportunidades/:id/etapa`
+Cuerpo: `{ etapa, motivo_perdida }`; `motivo_perdida` solo al perder. Se revisa en este orden y el primer fallo responde:
+
+| Orden | Código | Condición | Respuesta |
+|---|---|---|---|
+| 1 | 404 | No es suya | `{ error }` |
+| 2 | 409 | Está cerrada | `{ "error": "El plan ya está cerrado y no se puede modificar." }` |
+| 3 | 422 | `etapa` no existe, o la transición no está permitida (sección 5) | `"etapa": "No se puede pasar de <actual> a <nueva>."` |
+| 4 | 422 | Ganar sin ningún tratamiento | `"etapa": "Agregue al menos un tratamiento antes de aceptar el plan."` |
+| 5 | 422 | Perder sin motivo válido (de 1 a 255 caracteres sin contar espacios sobrantes) | `"motivo_perdida": "Escriba el motivo (de 1 a 255 caracteres)."` |
+| 6 | 409 | Regla propia (sección 2) | `{ "error": "El paciente necesita una cita de evaluación completada antes de recibir el presupuesto." }` |
+| 7 | 409 | El índice único del historial rechaza un cambio simultáneo | `{ "error": "El plan cambió al mismo tiempo en otra petición. Recárguelo." }` |
+| — | 200 | Todo correcto | El detalle actualizado |
+
+Al cerrar (`ganada` o `perdida`) el servidor pone `fecha_cierre`; `motivo_perdida` solo se guarda en `perdida`. El cambio, la fecha de cierre y el registro del historial van en una sola transacción: un intento rechazado no deja nada en el historial.
+
+#### `POST /oportunidades/:id/productos`
+Cuerpo: `{ producto_id, cantidad }`.
+
+| Código | Condición | Respuesta |
+|---|---|---|
+| 201 | Datos válidos | El detalle actualizado |
+| 404 | El plan no es suyo | `{ error }` |
+| 409 | El plan está cerrado | `{ "error": "El plan ya está cerrado y no se puede modificar." }` |
+| 422 | `producto_id` no es un tratamiento activo | `"producto_id": "Elija un tratamiento activo del catálogo."` |
+| 422 | `cantidad` no es un entero de 1 a 999 | `"cantidad": "La cantidad debe ser un número entero de 1 a 999."` |
+| 409 | El tratamiento ya está en el plan | `{ "error": "Ese tratamiento ya está en el plan; cambie su cantidad." }` |
+| 409 | Regla propia (sección 2) | El mensaje de la sección 2 |
+
+El precio unitario se copia del catálogo en ese momento; cualquier `precio_unitario` del cuerpo se ignora.
+
+#### `PATCH /oportunidades/:id/productos/:lineaId`
+Cuerpo: `{ cantidad }`. 200 con el detalle; 404 si el plan no es suyo o la línea no es de ese plan; 409 si el plan está cerrado; 422 en `cantidad` como al agregar.
+
+#### `DELETE /oportunidades/:id/productos/:lineaId`
+204 sin cuerpo; 404 si el plan no es suyo o la línea no es de ese plan; 409 si el plan está cerrado.
+
+#### `GET /reportes/resumen?mes=AAAA-MM`
+Respuesta 200 con `{ mes, ventas, total, pronostico, cartera: { clientes, maximo } }`. Sin `mes`, el mes actual de Guatemala. Formato inválido → 400 `"Escriba el mes con el formato AAAA-MM."`. Reglas de cálculo: sección 11 (R7 del enunciado).
+
+#### `GET /yo` (endpoint extra)
+Respuesta 200 con `{ id, nombre, correo }` del token. Sirve para probar la sesión. El enunciado permite agregar endpoints sin cambiar los suyos.
 <!-- fin sección 4 -->
 
 ## 5. Decisiones del enunciado (sección 7)
 <!-- Responsable: B -->
-_Pendiente._
+| Pregunta del enunciado | Nuestra decisión | Alternativa descartada | Por qué |
+|---|---|---|---|
+| ¿Qué transiciones del embudo permiten además del mínimo? | Avanzar **una etapa a la vez** entre las abiertas (prospecto → calificado → propuesta → negociacion); **perder desde cualquier etapa abierta**; **ganar solo desde negociacion**. Sin saltos, sin retrocesos y sin pasar a la misma etapa. Lo no permitido responde **422** ("No se puede pasar de X a Y."); una oportunidad cerrada responde **409** | Permitir retrocesos o saltos | Un retroceso haría que una etapa aparezca dos veces en el historial y complicaría el pronóstico. Sin retrocesos, cada etapa aparece **una sola vez** por oportunidad, y eso permite el índice único `(oportunidad_id, etapa_nueva)` de `historial_etapas` (sección 3.7) |
+| Una petición pide la etapa en la que el plan ya está (caso simultáneo de S8) | **422**: es una transición no permitida ("No se puede pasar de negociacion a negociacion."). El 409 queda para plan cerrado, regla propia y choque del índice único | Responder 409 | La segunda petición espera el candado, lee la etapa ya cambiada y la evalúa como cualquier otra transición. Así hay una sola regla y la respuesta no depende del momento |
+| ¿Qué pasa con las oportunidades y actividades de un cliente reasignado? | Las **cerradas** conservan su vendedor (el crédito de la venta es de quien la cerró). Las **abiertas** pasan al nuevo asesor. Las **actividades siguen al paciente**: la API filtra las actividades por la cartera del cliente, no por quien las registró | Que todo pase al nuevo asesor | Le quitaría al asesor anterior ventas que sí hizo y cambiaría sus reportes de meses pasados |
+| ¿Se puede liberar un cliente con oportunidades abiertas? | **No.** El panel muestra un mensaje; primero se cierran o se reasigna el paciente | Marcar sus oportunidades como perdidas automáticamente | Se perdería información de ventas que podrían cerrarse, sin que nadie lo decida |
+| ¿Qué pasa con la cartera de un vendedor desactivado? | Sus pacientes **se quedan asignados** hasta que el coordinador los reasigne. Su token deja de servir en la siguiente petición (el middleware vuelve a leer al usuario) | Liberarlos automáticamente | Coincide con la semilla (Iván Toj desactivado conserva a Hotel Los Pinos) y el coordinador decide a quién pasarlos |
+| ¿Qué hace la API con campos que el contrato no lista? | Se **ignoran**: nunca se usan | Rechazarlos con 422 | Rechazarlos rompería clientes que mandan campos de más sin mala intención. Lo importante es que nunca se usen: el dueño sale del token y el precio del catálogo |
+| ¿Cuál es su regla propia? | Un plan con un tratamiento que requiere evaluación (ortodoncia, implantes) no pasa a "Presupuesto enviado" ni después sin una cita (`reunion`) completada del paciente → **409** | — | Detalle completo en la sección 2 |
 <!-- fin sección 5 -->
 
 ## 6. Requisitos del panel (L1–L7)
 <!-- Responsable: A -->
-_Pendiente._
+Los criterios usan la semilla de verificación (`php artisan migrate:fresh --seeder=VerificacionSeeder`) salvo que se diga otra cosa. Datos que se repiten en los criterios:
+
+- **Cuentas:** Alicia (administradora); Sergio y Sandra (coordinadores); Valeria y Diego (equipo de Sergio); Carlos e Iván, desactivado (equipo de Sandra).
+- **Pacientes:** 21 en total. Valeria tiene 3, Diego 2, Carlos 9, Iván 1 y hay 6 disponibles (Agencia Cuatro Caminos, Café Zunil, Clínica San Rafael, Constructora Altiplano, Escuela Futuro y Gimnasio Fuerza).
+- **Rutas del panel:** usan los nombres del núcleo (`/clientes`, `/productos`, `/oportunidades`, `/reportes`, `/equipo`) y `/cuentas` para las cuentas. En pantalla se lee el vocabulario dental (sección 1.3).
+- **Fechas en pantalla:** hora de Guatemala (UTC−6 fijo), con el formato `31 oct 2026, 21:30`, igual que la SPA.
+- **Montos en pantalla:** `Q9,250.00`.
+
+### L1 · Esquema y semillas
+
+- **Migraciones.** Crean las tablas de la sección 3 con sus llaves foráneas, índices únicos y restricciones CHECK, tal como están escritas ahí. `rol`, `supervisor_id` y `activo` llegan en una migración propia; `productos.requiere_evaluacion`, en otra. La migración original de `users` de Laravel no se edita, y una migración que ya está en `main` tampoco: los cambios llegan con migraciones nuevas.
+- **`VerificacionSeeder`.** Carga exactamente la semilla de la sección 11 del enunciado: 7 cuentas, 5 productos, 21 clientes, 11 oportunidades con 13 líneas, 43 registros de historial y 4 actividades, con las fechas en UTC. Las contraseñas se guardan con `Hash::make()`.
+- **`SectorSeeder`.** Carga los datos de la clínica (sección 5 de `docs/reparto.md`): la coordinadora Lucía Méndez, los asesores Andrea Gómez y Kevin Chávez, los 9 tratamientos (Ortodoncia con brackets e Implante dental con `requiere_evaluacion = true`), pacientes con planes en las seis etapas y citas completadas y pendientes para demostrar la regla propia (sección 2.7). No repite correos, NIT ni teléfonos de la semilla de verificación, todos sus NIT son válidos y ningún asesor pasa de 10 pacientes.
+- **Comandos.** `php artisan migrate:fresh --seed` corre `VerificacionSeeder` y después `SectorSeeder`, sin pasos manuales. `php artisan migrate:fresh --seeder=VerificacionSeeder` deja solo la semilla de verificación.
+
+#### Criterios de aceptación
+
+- **Dado** una base MySQL vacía, **cuando** se ejecuta `php artisan migrate:fresh --seeder=VerificacionSeeder`, **entonces** el comando termina sin errores y `SELECT COUNT(*)` da 7 en `users`, 5 en `productos`, 21 en `clientes`, 11 en `oportunidades`, 13 en `oportunidad_productos`, 43 en `historial_etapas` y 4 en `actividades`.
+- **Dado** esa misma base, **cuando** se consulta `SELECT email, password FROM users`, **entonces** los 7 `password` empiezan con `$2y$`.
+- **Dado** esa misma base, **cuando** se consulta el historial de "Plan familiar", **entonces** tiene 4 registros (creación, `calificado`, `propuesta` y `perdida`) y el primero tiene `etapa_anterior` vacía.
+- **Dado** una base MySQL vacía, **cuando** se ejecuta `php artisan migrate:fresh --seed`, **entonces** el comando termina sin errores, existen las cuentas `lucia@dental.test`, `andrea@dental.test` y `kevin@dental.test`, y `SELECT COUNT(*) FROM productos WHERE requiere_evaluacion = 1` da 2.
+- **Dado** esa base con las dos semillas, **cuando** se consulta `SELECT vendedor_id, COUNT(*) FROM clientes WHERE vendedor_id IS NOT NULL GROUP BY vendedor_id`, **entonces** ningún conteo pasa de 10; y **cuando** se buscan NIT o teléfonos repetidos, no hay ninguno (los índices únicos no permitirían cargar la semilla).
+- **Dado** esa base con las dos semillas, **cuando** se consulta `SELECT DISTINCT etapa FROM oportunidades` filtrando los planes de Andrea y Kevin, **entonces** aparecen las seis etapas.
+- **Dado** el repositorio, **cuando** se ejecuta `git log --format=%H -- laravel/database/migrations/0001_01_01_000000_create_users_table.php`, **entonces** el archivo solo aparece en el commit en que se creó el proyecto.
+- Los criterios del esquema (CHECK, únicos y cascadas) están en la sección 3.
+
+### L2 · Cuentas y roles
+
+- **Inicio y cierre de sesión con Breeze (Blade).** La página de registro y su ruta no existen; tampoco hay enlace "Registrarse".
+- **Cuentas.** Solo el administrador abre "Cuentas" (`/cuentas`). Crea y edita cuentas con: nombre, correo (único), contraseña, rol, coordinador y estado (activa o desactivada).
+  - **Contraseña:** obligatoria al crear, de al menos 8 caracteres y con confirmación. Al editar es opcional: si se deja vacía, el hash se conserva.
+  - **Coordinador:** obligatorio si el rol es `vendedor`. El selector solo ofrece coordinadores **activos**, y el servidor lo vuelve a comprobar (sección 3.10). Si el rol no es `vendedor`, `supervisor_id` se guarda vacío aunque el formulario traiga un valor.
+- **No se borran cuentas.** No hay botón ni ruta para borrar; se desactivan con el campo estado.
+- **El administrador no se desactiva ni se quita el rol a sí mismo.** El servidor lo rechaza aunque el formulario se envíe a mano.
+- **Puerta por rol.**
+  - Un vendedor con la contraseña correcta **no** inicia sesión en el panel: ve "Esta cuenta es de asesor. Ingrese desde la aplicación de asesores." y no se crea sesión.
+  - Una cuenta desactivada con la contraseña correcta no inicia sesión: ve "Su cuenta está desactivada. Comuníquese con el administrador.".
+  - Con correo inexistente o contraseña incorrecta, el mensaje es el mismo en los dos casos: "El correo o la contraseña no son correctos.". Los mensajes de vendedor y de cuenta desactivada solo aparecen con la contraseña correcta, igual que en la API (sección 4.4).
+  - Si una cuenta con sesión abierta se desactiva (o deja de ser administrador o coordinador), en su **siguiente petición** el panel cierra su sesión y la lleva al inicio de sesión con el mensaje de cuenta desactivada. Esto lo hace un middleware que vuelve a leer al usuario en cada petición.
+- **Páginas por rol.** "Cuentas" y "Tratamientos" son solo del administrador. Un coordinador que abre esas URL a mano recibe **403**. Esto es distinto de lo ajeno (S5): ahí el dato existe pero es de otro equipo y responde 404; aquí es una sección completa que su rol no usa.
+
+#### Criterios de aceptación
+
+- **Dado** el panel encendido, **cuando** se abre `http://localhost:8000/register`, **entonces** responde **404**, y la página de inicio de sesión no muestra enlace de registro.
+- **Dado** Alicia con sesión, **cuando** crea una cuenta de rol `vendedor` con coordinador Sergio, **entonces** la cuenta aparece en la lista, en la base tiene `rol = 'vendedor'`, `supervisor_id` de Sergio, `activo = 1` y un `password` que empieza con `$2y$`.
+- **Dado** Alicia creando una cuenta de rol `vendedor`, **cuando** la envía sin coordinador, **entonces** el formulario vuelve con los datos escritos y un mensaje junto al campo coordinador; y **cuando** fuerza en el envío el id de Valeria (que no es coordinadora) como coordinador, **entonces** también aparece el mensaje junto al campo y no se crea la cuenta.
+- **Dado** Alicia editando la cuenta de Diego, **cuando** guarda sin escribir contraseña, **entonces** el `password` de Diego en la base no cambia y él sigue iniciando sesión en la API.
+- **Dado** Alicia con sesión, **cuando** edita su propia cuenta y elige estado desactivada, o rol `supervisor`, **entonces** el formulario vuelve con "No puede desactivar su propia cuenta." o "No puede cambiar su propio rol." y la base no cambia.
+- **Dado** el panel, **cuando** se busca una ruta o un botón para borrar cuentas, **entonces** no existe; un `DELETE /cuentas/{id}` enviado a mano no borra nada.
+- **Dado** el correo de Valeria y la contraseña correcta, **cuando** intenta iniciar sesión en el panel, **entonces** ve "Esta cuenta es de asesor. Ingrese desde la aplicación de asesores." y sigue en la página de inicio de sesión, sin sesión.
+- **Dado** el correo de Iván (desactivado) y la contraseña correcta, **cuando** intenta iniciar sesión en el panel, **entonces** ve "Su cuenta está desactivada. Comuníquese con el administrador.".
+- **Dado** un correo inexistente, y por separado el de Sergio con una contraseña incorrecta, **cuando** se envían, **entonces** los dos muestran "El correo o la contraseña no son correctos.".
+- **Dado** Sergio con sesión abierta en un navegador, **cuando** Alicia lo desactiva desde otro navegador y Sergio recarga cualquier página, **entonces** Sergio queda fuera del panel, en la página de inicio de sesión, con el mensaje de cuenta desactivada.
+- **Dado** Sergio con sesión, **cuando** abre a mano `/cuentas` o `/productos`, **entonces** el panel responde **403** y el menú no muestra esos enlaces.
+
+### L3 · Catálogo de tratamientos
+
+- **Lista.** Solo el administrador abre "Tratamientos" (`/productos`): nombre, precio en quetzales, "Requiere evaluación" (sí o no) y estado (activo o desactivado), ordenados por nombre. Muestra también los desactivados.
+- **Alta y edición.** Nombre (obligatorio, máximo 120 caracteres, único), precio (mayor que cero, con dos decimales como máximo y hasta `99999999.99`, que es lo que cabe en `DECIMAL(10,2)`), la casilla "Requiere evaluación" (sección 2) y el estado.
+- **No se borran.** No hay botón ni ruta para borrar; se desactivan. Un tratamiento desactivado deja de salir en `GET /productos` y no se puede agregar a un plan, pero las líneas que ya lo tienen no cambian.
+- **Cambiar un precio no cambia el pasado.** Las líneas guardan su `precio_unitario` (sección 3.6), así que ningún plan existente ni ningún reporte cambia al editar el catálogo.
+
+#### Criterios de aceptación
+
+- **Dado** Alicia con sesión, **cuando** agrega "Sellante dental" a Q150.00, **entonces** aparece en la lista como activo, con "Requiere evaluación: no", y en la base `precio = 150.00` y `requiere_evaluacion = 0`.
+- **Dado** el formulario de tratamiento, **cuando** se envía con precio `0`, `-5`, `12.345` o `abc`, **entonces** vuelve con lo escrito y un mensaje en español junto al precio, y no se guarda nada.
+- **Dado** el formulario de tratamiento, **cuando** se envía con el nombre "Plan básico" (ya existe), **entonces** vuelve con un mensaje junto al nombre.
+- **Dado** Alicia, **cuando** desactiva "Instalación", **entonces** `GET /productos` en la API ya no la devuelve y el plan "Capacitación de personal" sigue con su línea de Instalación 2 × Q450.00.
+- **Dado** Alicia, **cuando** cambia el precio de "Plan avanzado" a Q3,000.00, **entonces** el detalle de "Renovación de planes" sigue mostrando 2 × Q2,600.00 y total Q5,650.00, y las cifras de control de la sección 11 no cambian.
+- **Dado** el panel, **cuando** se busca una ruta o un botón para borrar tratamientos, **entonces** no existe.
+- El marcado de "Requiere evaluación" se comprueba con R-P9 (sección 2.6).
+
+### L4 · Pacientes y asignación
+
+**Quién ve qué.** El administrador ve los 21 pacientes. El coordinador ve los de los asesores de su equipo (activos y desactivados) más los disponibles (sección S5 y L5).
+
+- **Lista (`/clientes`).** Nombre, NIT (o "CF"), teléfono, correo y asesor (o "Disponible").
+  - **Búsqueda** por nombre o NIT, "contiene". El texto se compara con el nombre tal cual y, compactado igual que un NIT (sección 10), con el NIT, igual que `GET /clientes?q=` de la API.
+  - **Filtros:** por asesor (solo los que la persona puede ver) y "Sin asignar". Se combinan con la búsqueda.
+- **Alta y edición.** Nombre (obligatorio, máximo 150), NIT, teléfono, correo (opcional) y, al crear, asesor opcional (vacío = disponible).
+  - El NIT y el teléfono se normalizan con `app/Support/Nit.php` y `Telefono.php` **antes** de validar y de comprobar repetidos, y dan exactamente los resultados de la sección 10.
+  - Un repetido se compara ya normalizado y sin contar al propio paciente al editar. Si dos escrituras llegan a la vez, el índice único decide: el error 1062 se convierte en el mensaje junto al campo, nunca en una página de error.
+  - Mensajes (los mismos textos que la API): "Escriba un NIT válido (con su dígito verificador) o CF.", "Escriba un teléfono de Guatemala de 8 dígitos.", "Ya existe un paciente con ese NIT.", "Ya existe un paciente con ese teléfono.", "Escriba un correo válido.".
+- **Asignar** (paciente disponible → asesor), **reasignar** (de un asesor a otro) y **liberar** (asesor → disponible).
+  - El asesor de destino debe ser un vendedor **activo**; para el coordinador, además, de **su equipo**. Si no, error junto al campo "Elija un asesor activo de su equipo." (el selector ya solo ofrece esos).
+  - **Cartera máxima de 10** con el candado de la sección 3.10: transacción → `SELECT id FROM users WHERE id = ? FOR UPDATE` del asesor de destino → contar → asignar. Si ya tiene 10: error junto al campo "Ese asesor ya tiene 10 pacientes, el máximo permitido.". Vale también al crear un paciente con asesor.
+  - **Reasignar** (sección 5): en la misma transacción, los planes **abiertos** del paciente pasan al nuevo asesor; los **cerrados** se quedan con su asesor; las actividades no se tocan (siguen al paciente). Orden de candados: `users` → `clientes` → `oportunidades`.
+  - **Liberar** (sección 5): si el paciente tiene algún plan abierto, no se libera y se muestra "No se puede liberar: el paciente tiene planes de tratamiento abiertos. Ciérrelos o reasigne al paciente.". Con solo planes cerrados sí se libera, y esos planes conservan su asesor.
+  - El paciente de un asesor desactivado sigue asignado hasta que alguien lo reasigne o libere (sección 5).
+- **Eliminar.** Solo el administrador, y solo si el paciente no tiene **ningún** plan (abierto o cerrado). Si tiene, se muestra "No se puede eliminar: el paciente tiene planes de tratamiento." y no se borra. Al eliminarlo se borran sus actividades (cascada, sección 3.9). El coordinador no tiene botón ni ruta para eliminar (**403**).
+
+#### Criterios de aceptación
+
+- **Dado** Alicia, **cuando** abre `/clientes` sin filtros, **entonces** ve 21 pacientes; con el filtro "Sin asignar" ve 6; con el filtro "Iván Toj" ve solo Hotel Los Pinos.
+- **Dado** Sergio, **cuando** abre `/clientes` sin filtros, **entonces** ve 11 pacientes (los 3 de Valeria, los 2 de Diego y los 6 disponibles) y no ve Abarrotes San Juan; su filtro de asesor solo ofrece a Valeria y Diego.
+- **Dado** Alicia, **cuando** busca `4521817-k`, y después `quetzal`, **entonces** las dos búsquedas muestran Comercial El Quetzal.
+- **Dado** Alicia creando un paciente, **cuando** envía NIT `4521817-k`, **entonces** vuelve con lo escrito y "Ya existe un paciente con ese NIT." junto al NIT; y con teléfono `+502 5555-1234`, "Ya existe un paciente con ese teléfono." junto al teléfono.
+- **Dado** Alicia creando un paciente, **cuando** envía NIT `4521817-1` y teléfono `1234-5678`, **entonces** aparece un mensaje junto a cada campo y lo escrito se conserva.
+- **Dado** Alicia creando "Paciente Prueba" con NIT `cf` y teléfono `(502) 7761.9999`, sin asesor, **cuando** lo guarda, **entonces** en la base queda `nit = NULL`, `telefono = '77619999'` y `vendedor_id = NULL`, y la lista lo muestra con NIT "CF" y "Disponible".
+- **Dado** cada entrada de la sección 10, **cuando** se escribe en el formulario de alta del panel, **entonces** se guarda o se rechaza exactamente como dice la tabla (repetidos → mensaje junto al campo).
+- **Dado** Sandra, **cuando** asigna Agencia Cuatro Caminos a Carlos (9 de 10), **entonces** Carlos queda con 10 y Agencia Cuatro Caminos aparece en `GET /clientes` con el token de Carlos; y **cuando** después intenta asignarle Escuela Futuro, **entonces** ve "Ese asesor ya tiene 10 pacientes, el máximo permitido." y Escuela Futuro sigue disponible.
+- **Dado** Sergio, **cuando** envía a mano el formulario de asignar con el id de Carlos (equipo de Sandra) o de Iván (desactivado), **entonces** ve "Elija un asesor activo de su equipo." junto al campo y nada cambia.
+- **Dado** Sergio, **cuando** reasigna Comercial El Quetzal de Valeria a Diego, **entonces** "Ampliación a bodega" y "Seguimiento anual" quedan con `vendedor_id` de Diego, "Renovación de planes" (ganada) sigue con Valeria, la actividad "Confirmar fecha de instalación" sigue en el paciente, y en el reporte de octubre de 2026 Valeria conserva 2 ventas y Q9,250.00, con pronóstico Q450.00, y Diego queda con pronóstico Q2,175.38 y cartera 3 de 10.
+- **Dado** Sergio, **cuando** intenta liberar Ferretería Xela (tiene "Capacitación de personal" en `propuesta`), **entonces** ve el mensaje de planes abiertos y el paciente sigue con Valeria.
+- **Dado** Sergio, **cuando** libera María Coyoy (solo tiene planes cerrados), **entonces** queda disponible, Valeria pasa a 2 de 10, y "Soporte del hogar" sigue siendo una venta de Valeria en noviembre de 2026 (1 venta, Q3,600.00).
+- **Dado** Sandra, **cuando** reasigna Hotel Los Pinos de Iván (desactivado) a Carlos, **entonces** el cambio se guarda.
+- **Dado** Alicia, **cuando** elimina Café Zunil, **entonces** desaparece de la lista y de `GET /clientes/disponibles`; y **cuando** intenta eliminar Ferretería Xela, **entonces** ve "No se puede eliminar: el paciente tiene planes de tratamiento." y el paciente sigue.
+- **Dado** Sergio, **cuando** envía a mano la petición de eliminar Café Zunil, **entonces** el panel responde **403** y el paciente sigue.
+- El candado frente a la API al mismo tiempo se comprueba en S8 y en la sección 3.
+
+### L5 · Equipo y visibilidad
+
+- **El coordinador solo ve a su equipo.** Asesores con `supervisor_id` igual al suyo, sus pacientes, sus planes y los pacientes disponibles. Todo lo demás responde **404**, también al escribir la URL a mano o enviar un formulario directamente (S5).
+- **Solo asigna a asesores activos de su equipo** (L4).
+- **Página "Mi equipo" (`/equipo`).** Solo para el coordinador (el administrador ve todo en el reporte, L6; si abre `/equipo` recibe **403**). Una fila por asesor de su equipo, activos y desactivados:
+  - nombre y estado ("Desactivado" si aplica);
+  - cartera "**x de 10**";
+  - ventas del mes y total vendido del mes, con las reglas de R7 (mes en hora de Guatemala con `DATE_FORMAT(fecha_cierre - INTERVAL 6 HOUR, '%Y-%m')`, total con el precio guardado en la línea).
+  - Por omisión muestra el mes actual de Guatemala y tiene un selector de mes (`?mes=AAAA-MM`) para revisar otros meses.
+
+#### Criterios de aceptación
+
+- **Dado** Sergio, **cuando** abre `/equipo?mes=2026-10`, **entonces** ve a Valeria con "3 de 10", 2 ventas y Q9,250.00, y a Diego con "2 de 10", 1 venta y Q6,000.00; no ve a Carlos ni a Iván.
+- **Dado** Sergio, **cuando** abre `/equipo?mes=2026-11`, **entonces** Valeria tiene 1 venta y Q3,600.00, y Diego 0 y Q0.00.
+- **Dado** Sandra, **cuando** abre `/equipo?mes=2026-10`, **entonces** ve a Carlos con "9 de 10", 1 venta y Q7,200.00, y a Iván marcado "Desactivado" con "1 de 10", 0 ventas y Q0.00.
+- **Dado** Sergio, **cuando** abre a mano la URL de un paciente o de un plan del equipo de Sandra, **entonces** el panel responde **404** (S5).
+- **Dado** Alicia, **cuando** abre `/equipo`, **entonces** el panel responde **403**.
+
+### L6 · Planes de tratamiento y reportes
+
+- **Planes (`/oportunidades`), solo lectura.** El administrador ve todos; el coordinador, los de los asesores de su equipo.
+  - Columnas: título, paciente, asesor, etapa (en vocabulario dental), total (`SUM(cantidad * precio_unitario)` en SQL) y fecha de cierre en hora de Guatemala (vacía si está abierto).
+  - Filtros por etapa y por asesor, combinables.
+  - **Detalle** de cada plan: sus tratamientos con cantidad, precio guardado y subtotal; el total; el motivo si fue rechazado; y el historial con etapa anterior, etapa nueva, quién y cuándo (hora de Guatemala).
+  - No hay formularios ni rutas para crear, editar, cambiar de etapa ni tocar tratamientos de un plan: eso lo hace el asesor en la SPA.
+- **Reporte del mes (`/reportes`).** Selector de mes (`?mes=AAAA-MM`; por omisión, el mes actual de Guatemala). Con las reglas de R7 y las mismas expresiones que la API (sección 11):
+  - **Por asesor:** una fila por asesor del alcance (los del equipo para el coordinador; todos para el administrador, agrupados por coordinador), incluidos los desactivados, con ventas del mes, total vendido del mes y pronóstico.
+  - **Totales:** una fila del equipo para el coordinador; para el administrador, una por equipo y una de toda la empresa. El pronóstico de una fila de totales es `ROUND(SUM(total × probabilidad), 2)` sobre todos sus planes abiertos, no la suma de las filas ya redondeadas.
+  - **Por tratamiento:** unidades vendidas en el mes (`SUM(cantidad)` de las líneas de planes ganados), total vendido y pronóstico de sus líneas en planes abiertos, dentro del mismo alcance.
+  - **Crédito de una venta:** la venta es del asesor de `oportunidades.vendedor_id`, y cuenta en el equipo al que ese asesor pertenece hoy.
+  - Todo se calcula en la base (Eloquent o constructor de consultas con `selectRaw` de expresiones fijas). El dinero no pasa por float en PHP: se formatea para mostrarlo, nunca se suma ni se multiplica en PHP.
+
+#### Criterios de aceptación
+
+- **Dado** Alicia, **cuando** abre `/oportunidades`, **entonces** ve los 11 planes; con el filtro "Aceptado" ve 5; con el filtro de asesor "Diego Castillo" ve 2.
+- **Dado** Sergio, **cuando** abre `/oportunidades`, **entonces** ve 9 planes (7 de Valeria y 2 de Diego) y ninguno de Carlos.
+- **Dado** Alicia en la lista de planes, **cuando** mira "Equipo para sucursal", **entonces** el total es Q3,600.00 y la fecha de cierre es `31 oct 2026, 21:30` (en la base es `2026-11-01 03:30:00` UTC).
+- **Dado** Alicia, **cuando** abre el detalle de "Renovación de planes", **entonces** ve Plan avanzado 2 × Q2,600.00 = Q5,200.00, Instalación 1 × Q450.00 = Q450.00, total Q5,650.00 y 5 registros de historial de Valeria López; y el detalle de "Plan familiar" muestra el motivo "Eligió a la competencia".
+- **Dado** el panel, **cuando** se envía a mano un `PATCH` o `DELETE` a `/oportunidades/{id}`, **entonces** no cambia nada en la base.
+- **Dado** Alicia, **cuando** abre `/reportes?mes=2026-10`, **entonces** ve Valeria 2 · Q9,250.00 · Q2,512.88; Diego 1 · Q6,000.00 · Q112.50; Carlos 1 · Q7,200.00 · Q4,125.75; equipo de Sergio 3 · Q15,250.00 · Q2,625.38; equipo de Sandra 1 · Q7,200.00 · Q4,125.75; toda la empresa 4 · Q22,450.00 · Q6,751.13.
+- **Dado** lo mismo, **cuando** mira la tabla por tratamiento, **entonces** ve Plan básico 5 · Q6,000.00; Plan avanzado 2 · Q5,200.00; Instalación 1 · Q450.00; Soporte anual 3 · Q10,800.00 (sección 11.2), y de pronóstico Plan avanzado Q6,188.63 e Instalación Q562.50.
+- **Dado** Alicia, **cuando** abre `/reportes?mes=2026-11`, **entonces** Valeria tiene 1 venta, Q3,600.00 y el mismo pronóstico Q2,512.88.
+- **Dado** Sergio, **cuando** abre `/reportes?mes=2026-10`, **entonces** ve solo a Valeria y Diego, el total del equipo 3 · Q15,250.00 · Q2,625.38, y por tratamiento Plan básico 5 · Q6,000.00, Plan avanzado 2 · Q5,200.00, Instalación 1 · Q450.00 y Soporte anual 1 · Q3,600.00.
+- **Dado** Sandra, **cuando** abre `/reportes?mes=2026-10`, **entonces** ve 1 venta, Q7,200.00 y Q4,125.75 para su equipo, con Iván en 0.
+- **Dado** Valeria gana un plan en la SPA hoy, **cuando** Alicia abre el reporte del mes actual, **entonces** la venta aparece en la fila de Valeria (prueba central del enunciado).
+- Los criterios de cifras de la sección 11.5 también aplican a este requisito.
+
+### L7 · Validación en el servidor
+
+- **Cada formulario tiene su FormRequest** (`CuentaRequest`, `ProductoRequest`, `ClienteRequest`, `AsignarRequest`). Lo que no cabe en una regla simple (repetidos tras normalizar, cartera llena, liberar con planes abiertos, el propio administrador) se valida en el servidor y se devuelve como error del campo o mensaje de la página, nunca como página de error.
+- **Español y de usted.** `APP_LOCALE=es` y `lang/es/validation.php` con todos los mensajes que usan los formularios, más los nombres de los campos en pantalla (`'telefono' => 'teléfono'`, `'supervisor_id' => 'coordinador'`, `'vendedor_id' => 'asesor'`…). Ningún mensaje en inglés llega a la pantalla.
+- **Si falla, el formulario vuelve** con lo escrito (`old()`) y cada mensaje **junto a su campo** (`@error`). La contraseña no se vuelve a llenar.
+- **Las dos puertas dan el mismo resultado.** El NIT, el teléfono, los repetidos y la cartera máxima se deciden igual que en la API (secciones 3.10 y 10): lo que la API rechaza, el panel lo rechaza, y lo que la API guarda, el panel lo guarda igual.
+
+#### Criterios de aceptación
+
+- **Dado** cualquier formulario del panel, **cuando** se envía vacío, **entonces** cada campo obligatorio muestra un mensaje en español que trata de usted (por ejemplo, "Escriba el nombre del paciente.") y ningún texto en inglés.
+- **Dado** el alta de paciente con un correo `no-es-correo` y el resto válido, **cuando** se envía, **entonces** el formulario vuelve con nombre, NIT y teléfono escritos y "Escriba un correo válido." junto al correo.
+- **Dado** el alta de cuenta con contraseña de 5 caracteres, **cuando** se envía, **entonces** el mensaje aparece junto a la contraseña, el resto de los campos conserva lo escrito y el campo de contraseña queda vacío.
+- **Dado** el teléfono `5555-9876` guardado desde la API con `POST /clientes`, **cuando** Alicia crea en el panel un paciente con teléfono `+502 5555 9876`, **entonces** ve "Ya existe un paciente con ese teléfono."; y al revés, un NIT `76543218` guardado en el panel hace que `POST /clientes` con `000-7654321-8` responda 409.
+- **Dado** el código, **cuando** se ejecuta `git grep -n "validate\|Request" laravel/app/Http/Controllers`, **entonces** toda acción que recibe datos usa un FormRequest o `validate`.
+
+**Pregunta abierta:** ¿qué pasa si el administrador cambia el rol de un vendedor que tiene pacientes, o desactiva a un coordinador que tiene asesores? El CHECK de `users` obliga a vaciar `supervisor_id` si deja de ser vendedor, pero sus pacientes quedarían con un `vendedor_id` que ya no es asesor, y los asesores de un coordinador desactivado quedarían sin coordinador que los vea. Propongo rechazar los dos cambios con un mensaje hasta que se reasignen los pacientes o los asesores, pero no lo decide el enunciado ni el reparto.
+
+**Pregunta abierta:** ¿puede el coordinador **editar** los datos de un paciente disponible? Es la misma pregunta abierta de S9; mientras no se decida, L4 y L5 solo dicen que lo **ve** y lo **asigna**.
+
+**Pregunta abierta:** si un asesor cambia de equipo, ¿sus ventas pasadas se cuentan en el equipo nuevo o en el anterior? L6 las cuenta en el equipo actual (el modelo de datos no guarda el equipo de cada venta). Hay que confirmarlo.
 <!-- fin sección 6 -->
 
 ## 7. Requisitos de la API (A1–A8)
 <!-- Responsable: B -->
-_Pendiente._
+Los datos son los de la semilla de verificación (`php artisan migrate:fresh --seeder=VerificacionSeeder`), salvo que se diga otra cosa. Los mensajes son los de la sección 4.
+
+### A1 · Inicio de sesión con JWT
+
+- **Dado** Valeria (asesora activa), **cuando** envía `POST /auth/login` con su correo y la contraseña correcta, **entonces** recibe **200** con `{ token, usuario: { id, nombre, correo } }`, y el token es un JWT HS256 con `sub` igual a su id y la expiración de `JWT_EXPIRA`.
+- **Dado** Sergio (supervisor) o Alicia (administradora), **cuando** inician sesión con la contraseña correcta, **entonces** reciben **403** "Esta cuenta no es de asesor…" y ningún token.
+- **Dado** Iván (asesor desactivado), **cuando** inicia sesión con la contraseña correcta, **entonces** recibe **403** "Su cuenta está desactivada…" y ningún token.
+- **Dado** un correo que no existe, y por separado el correo de Valeria con una contraseña incorrecta, **cuando** se envían, **entonces** las dos respuestas son **401** con exactamente el mismo cuerpo.
+- **Dado** un cuerpo sin `correo` o con `clave` vacía, **cuando** se envía, **entonces** la respuesta es **422** con un mensaje por campo.
+
+### A2 · Middleware de autenticación
+
+- **Dado** cualquier ruta salvo el inicio de sesión, **cuando** se pide sin cabecera `Authorization`, **entonces** la respuesta es **401** "Falta el token de acceso.".
+- **Dado** el token de Valeria con un carácter cambiado, un token vencido, o uno firmado con otro algoritmo, **cuando** se usa, **entonces** la respuesta es **401** "El token no es válido o ya venció.".
+- **Dado** Valeria con un token válido, **cuando** el administrador la desactiva en el panel y ella hace otra petición, **entonces** la respuesta es **401**: el middleware vuelve a leer al usuario en la base en cada petición.
+
+### A3 · Clientes y cartera
+
+- **Dado** Valeria, **cuando** pide `GET /clientes`, **entonces** recibe sus 3 pacientes y María Coyoy trae `"nit": "CF"`.
+- **Dado** Valeria y el id de Farmacia Los Altos (de Diego), **cuando** pide `GET` o `PATCH /clientes/:id`, **entonces** recibe **404** y el paciente no cambia.
+- **Dado** Valeria, **cuando** envía `POST /clientes` con NIT `452 1817-k`, **entonces** recibe **409** "Ya existe un paciente con ese NIT.".
+- **Dado** Valeria, **cuando** envía `POST /clientes` con teléfono `1234-5678`, **entonces** recibe **422** con `errores.telefono`.
+- **Dado** Valeria, **cuando** pide `GET /clientes/disponibles`, **entonces** cada elemento trae solo `id` y `nombre`.
+- **Dado** Carlos con 9 pacientes, **cuando** toma un disponible y luego otro, **entonces** el primero responde **200** y el segundo **409** por cartera llena.
+- **Dado** un paciente disponible, **cuando** llegan 10 `POST /clientes/:id/tomar` al mismo tiempo de varios asesores, **entonces** exactamente uno responde **200** y nueve **409**.
+- **Dado** Carlos con 9 pacientes, **cuando** llegan varias tomas simultáneas de pacientes distintos, **entonces** solo una entra y su cartera queda en 10.
+- **Dado** Valeria, **cuando** envía `POST /clientes` con un `vendedor_id` de Diego en el cuerpo, **entonces** el paciente queda en la cartera de Valeria.
+
+### A4 · Oportunidades y productos
+
+- **Dado** Valeria, **cuando** pide el detalle de "Renovación de planes", **entonces** recibe `total: 5650`, Plan avanzado con `precio_unitario: 2600` y 5 registros de historial.
+- **Dado** un plan nuevo, **cuando** Valeria le agrega "Plan avanzado", **entonces** la línea guarda `precio_unitario: 2750.5`; y si después el administrador cambia ese precio en el catálogo, la línea no cambia.
+- **Dado** un plan, **cuando** se envía `precio_unitario` en el cuerpo al agregar un producto, **entonces** se ignora y se usa el del catálogo.
+- **Dado** un plan en `prospecto`, **cuando** se pide pasar a `propuesta`, **entonces** la respuesta es **422** y el historial no cambia.
+- **Dado** un plan en `negociacion` sin tratamientos, **cuando** se pide `ganada`, **entonces** **422**.
+- **Dado** un plan abierto, **cuando** se pide `perdida` con `motivo_perdida: "   "`, **entonces** **422**.
+- **Dado** "Plan familiar" (perdida), **cuando** se pide cambiar su título, su etapa o sus productos, **entonces** **409**.
+- **Dado** un plan, **cuando** se agrega un producto que ya tiene, **entonces** **409**; y "Licencia anterior" (inactivo) responde **422**.
+- **Dado** un plan en `prospecto`, **cuando** llegan 5 cambios simultáneos a `calificado`, **entonces** exactamente uno responde **200** y el historial tiene un solo registro nuevo.
+
+### A5 · Actividades
+
+- **Dado** Valeria, **cuando** pide `GET /actividades?estado=pendiente`, **entonces** "Enviar propuesta de capacitación" trae `vencida: false` y "Presentar opciones de soporte" trae `vencida: true`.
+- **Dado** Valeria, **cuando** pide `?estado=hoy`, **entonces** **400**.
+- **Dado** Valeria, **cuando** crea una actividad con `vence_en: "2026-12-01T10:00"`, **entonces** **422**; y con `"2026-12-01T10:00:00-06:00"`, **201** con `vence_en: "2026-12-01T16:00:00.000Z"`.
+- **Dado** una actividad de un paciente de Diego, **cuando** Valeria la marca con `PATCH`, **entonces** **404**; y con `completada: "si"`, **422**.
+- **Dado** cualquier actividad, **cuando** se devuelve, **entonces** `completada` y `vencida` son booleanos (`true`/`false`, no `1`/`0`).
+
+### A6 · Resumen del mes
+
+- **Dado** Valeria, **cuando** pide `?mes=2026-10`, **entonces** recibe `{ "mes": "2026-10", "ventas": 2, "total": 9250, "pronostico": 2512.88, "cartera": { "clientes": 3, "maximo": 10 } }`, con los montos como números.
+- **Dado** Valeria, **cuando** pide `?mes=2026-11`, **entonces** `ventas: 1`, `total: 3600`, `pronostico: 2512.88`.
+- **Dado** Diego y Carlos, **cuando** piden `?mes=2026-10`, **entonces** Diego recibe 1, 6000, 112.5 y 2 de 10; Carlos, 1, 7200, 4125.75 y 9 de 10.
+- **Dado** Valeria, **cuando** pide `?mes=2026-13`, **entonces** **400**.
+
+### A7 · Errores, códigos y formato
+
+- **Dado** cualquier error (JSON mal formado, ruta inexistente, `:id` no numérico, error inesperado), **cuando** ocurre, **entonces** la respuesta es JSON con el código de la sección 4, nunca HTML.
+- **Dado** un error inesperado, **cuando** ocurre, **entonces** la respuesta es **500** con el mensaje genérico, y el detalle solo aparece en la consola del servidor.
+- **Dado** las respuestas de login, clientes, oportunidades, actividades y resumen, **cuando** se revisan, **entonces** ninguna trae `password`, `vendedor_id`, `user_id`, `supervisor_id` ni `usuario_id`.
+
+### A8 · Documentación
+
+- **Dado** el repositorio, **cuando** se lee `README.md`, **entonces** tiene la tabla de endpoints y los pasos exactos para levantar el panel, la API y la SPA desde cero.
+- **Dado** `docs/api.postman_collection.json`, **cuando** se importa y se ejecuta, **entonces** tiene al menos una petición por endpoint de la sección 4, los errores principales y la carpeta "Regla propia" con la prueba de la sección 2.
 <!-- fin sección 7 -->
 
 ## 8. Requisitos de la SPA (F1–F6)
@@ -350,7 +811,35 @@ Vista: `#/cartera` (`js/vistas/cartera.js`). Usa `GET /clientes?q=`, `GET /repor
 
 ### F3 · Embudo
 <!-- Responsable: B -->
-_Pendiente._
+Vistas: `#/embudo` (`js/vistas/embudo.js`) y `#/plan/:id` (`js/vistas/plan.js`). Siguen el contrato de vistas de `docs/plan.md` (estado → render, `data-accion` y `data-form`, `escapar()`).
+
+**Tablero (`#/embudo`).** Usa `GET /oportunidades` y `GET /clientes`.
+- Una columna por etapa abierta: **Interesado**, **Evaluado**, **Presupuesto enviado** y **En negociación**, cada una con el número de planes. Cada tarjeta muestra el título (enlace a `#/plan/:id`), el paciente, el total en quetzales y la probabilidad.
+- Debajo, **Planes cerrados**: Aceptados y Rechazados, con la fecha de cierre en hora de Guatemala y el motivo si fue rechazado.
+- Formulario **Nuevo plan**: paciente de su cartera y título (`POST /oportunidades`). Con 201 abre el detalle del plan nuevo; con 422 muestra cada error junto a su campo y conserva lo escrito. Si no tiene pacientes, dice "Primero agregue pacientes a su cartera" con un enlace a `#/cartera`.
+
+**Detalle (`#/plan/:id`).** Usa `GET /oportunidades/:id` y `GET /productos`.
+- Encabezado con título, paciente, etapa (nombre de pantalla), probabilidad y total.
+- Tratamientos con cantidad, precio guardado y subtotal.
+- Si el plan está abierto: editar el título; agregar un tratamiento activo que todavía no esté en el plan (con la etiqueta "Requiere evaluación" si aplica); cambiar cantidades; quitar tratamientos; y los botones de etapa según la sección 5: "Avanzar a <siguiente>" desde las tres primeras etapas, "Marcar como aceptado" solo en En negociación, y "Marcar como rechazado" en cualquier etapa abierta, que pide el motivo.
+- Si está cerrado: sin formularios ni botones; muestra la fecha de cierre y el motivo si fue rechazado.
+- Historial: etapa anterior → nueva con nombres de pantalla ("Creado" si la anterior es `null`), quién y cuándo, en hora de Guatemala.
+- Errores: los 422 aparecen junto a su campo; los 409 (cerrado, repetido, regla propia, cambio simultáneo) como aviso con el mensaje de la API. Con 404 muestra "No se encontró el plan." y un enlace al embudo.
+
+**Calidad.** Todo texto de la API pasa por `escapar()`. A 375 px las columnas se apilan y no hay desplazamiento horizontal.
+
+#### Criterios de aceptación
+
+- **Dado** Valeria con la semilla de verificación, **cuando** abre `#/embudo`, **entonces** ve Seguimiento anual en Interesado, Capacitación de personal en Presupuesto enviado, Ampliación a bodega (Q2,750.50) en En negociación, y en cerrados 3 aceptados y Plan familiar rechazado con "Eligió a la competencia".
+- **Dado** el tablero, **cuando** se mira "Equipo para sucursal", **entonces** su fecha de cierre es el 31 de octubre de 2026, 21:30 (hora de Guatemala), no el 1 de noviembre.
+- **Dado** el formulario Nuevo plan sin título, **cuando** se envía, **entonces** aparece el error junto al título y el paciente elegido se conserva.
+- **Dado** el detalle de "Renovación de planes", **cuando** se abre, **entonces** se ve Aceptado sin botones, Plan avanzado Q2,600.00 × 2 = Q5,200.00, total Q5,650.00 y 5 líneas de historial.
+- **Dado** un plan en Interesado, **cuando** se abre, **entonces** no aparece el botón "Marcar como aceptado".
+- **Dado** un plan nuevo, **cuando** el asesor le agrega un tratamiento, lo avanza hasta En negociación y lo acepta, **entonces** queda Aceptado y el historial muestra cada paso en hora de Guatemala.
+- **Dado** un plan, **cuando** se agrega dos veces el mismo tratamiento, **entonces** se ve el aviso del 409; y al rechazar sin motivo, el error aparece junto al campo del motivo.
+- **Dado** la semilla del sector, **cuando** un asesor intenta avanzar a Presupuesto enviado un plan de ortodoncia sin cita completada, **entonces** se ve el aviso "El paciente necesita una cita de evaluación…".
+- **Dado** un paciente llamado `<img src=x onerror=alert(1)>`, **cuando** aparece en el tablero o en el detalle, **entonces** se ve como texto y no se ejecuta nada.
+- **Dado** el navegador a 375 px, **cuando** se abren `#/embudo` y `#/plan/:id`, **entonces** las columnas se apilan y no hay desplazamiento horizontal.
 
 ### F4 · Actividades
 <!-- Responsable: A -->
