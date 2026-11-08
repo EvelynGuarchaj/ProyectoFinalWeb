@@ -1,6 +1,6 @@
 # 14 · Reporte del mes
 
-**Estado:** Aprobado
+**Estado:** Implementado 
 **Depende de:** 01-esquema-y-semilla (tablas `users`, `clientes`, `oportunidades`, `oportunidad_productos`, `productos`; `VerificacionSeeder`), 03-cuentas-roles (middleware `panel` y `rol`; menú con la entrada reservada `reportes.index`; `MenuTest`), 07-asignacion (`App\Services\Cartera::MAXIMO`), 09-equipo (`EquipoController`: mes de Guatemala, `ventasDelMes()`, aviso de mes no válido; `Formato::mesEnPalabras()`), 12-planes (`User::asesoresVisiblesPara()`, `Oportunidad::ABIERTAS`)
 **Fecha:** 2026-11-08
 **Dueña:** A
