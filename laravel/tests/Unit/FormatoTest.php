@@ -37,6 +37,14 @@ class FormatoTest extends TestCase
         $this->assertSame('31 oct 2026, 21:30', Formato::fechaGT($fecha));
     }
 
+    /** Spec 09, paso 1: título del mes en la página Mi equipo. */
+    public function test_mes_en_palabras(): void
+    {
+        $this->assertSame('enero 2026', Formato::mesEnPalabras('2026-01'));
+        $this->assertSame('octubre 2026', Formato::mesEnPalabras('2026-10'));
+        $this->assertSame('diciembre 2025', Formato::mesEnPalabras('2025-12'));
+    }
+
     public function test_fecha_gt_vacia(): void
     {
         $this->assertSame('—', Formato::fechaGT(null));
