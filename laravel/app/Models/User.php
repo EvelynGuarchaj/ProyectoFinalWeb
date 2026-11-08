@@ -25,6 +25,18 @@ class User extends Authenticatable
 
     protected $table = 'users';
 
+    /** Rol en la base => nombre en pantalla. Lo usan la tabla, el filtro y el formulario de cuentas. */
+    public const ROLES = [
+        'administrador' => 'Administrador',
+        'supervisor' => 'Coordinador',
+        'vendedor' => 'Asesor',
+    ];
+
+    public function rolEnPantalla(): string
+    {
+        return self::ROLES[$this->rol] ?? $this->rol;
+    }
+
     /**
      * Get the attributes that should be cast.
      *

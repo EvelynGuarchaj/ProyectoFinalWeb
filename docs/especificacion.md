@@ -549,6 +549,10 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
   - **Coordinador:** obligatorio si el rol es `vendedor`. El selector solo ofrece coordinadores **activos**, y el servidor lo vuelve a comprobar (sección 3.10). Si el rol no es `vendedor`, `supervisor_id` se guarda vacío aunque el formulario traiga un valor.
 - **No se borran cuentas.** No hay botón ni ruta para borrar; se desactivan con el campo estado.
 - **El administrador no se desactiva ni se quita el rol a sí mismo.** El servidor lo rechaza aunque el formulario se envíe a mano.
+- **Cuentas con gente a cargo.** El CHECK de `users` obliga a vaciar `supervisor_id` cuando una cuenta deja de ser `vendedor`, así que el servidor rechaza los cambios que dejarían pacientes o asesores sin dueño válido. Cada rechazo es un mensaje junto al campo y no se guarda nada:
+  - Un **coordinador que tiene asesores** (activos o desactivados) no se desactiva ni cambia de rol: "No puede desactivar a un coordinador que tiene asesores. Primero cámbielos de coordinador." o "No puede cambiar el rol de un coordinador que tiene asesores. Primero cámbielos de coordinador.". Para mover a un asesor de equipo se edita su cuenta y se le elige otro coordinador.
+  - Un **asesor que tiene pacientes** no cambia de rol: "No puede cambiar el rol de un asesor que tiene pacientes. Primero reasígnelos o libérelos.".
+  - Un asesor con pacientes **sí** se puede desactivar: sus pacientes se quedan asignados hasta que el coordinador los reasigne (sección 5).
 - **Puerta por rol.**
   - Un vendedor con la contraseña correcta **no** inicia sesión en el panel: ve "Esta cuenta es de asesor. Ingrese desde la aplicación de asesores." y no se crea sesión.
   - Una cuenta desactivada con la contraseña correcta no inicia sesión: ve "Su cuenta está desactivada. Comuníquese con el administrador.".
@@ -563,6 +567,8 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
 - **Dado** Alicia creando una cuenta de rol `vendedor`, **cuando** la envía sin coordinador, **entonces** el formulario vuelve con los datos escritos y un mensaje junto al campo coordinador; y **cuando** fuerza en el envío el id de Valeria (que no es coordinadora) como coordinador, **entonces** también aparece el mensaje junto al campo y no se crea la cuenta.
 - **Dado** Alicia editando la cuenta de Diego, **cuando** guarda sin escribir contraseña, **entonces** el `password` de Diego en la base no cambia y él sigue iniciando sesión en la API.
 - **Dado** Alicia con sesión, **cuando** edita su propia cuenta y elige estado desactivada, o rol `supervisor`, **entonces** el formulario vuelve con "No puede desactivar su propia cuenta." o "No puede cambiar su propio rol." y la base no cambia.
+- **Dado** Alicia editando a Sergio (tiene a Valeria y Diego), **cuando** lo desactiva o le cambia el rol, **entonces** ve el mensaje de coordinador con asesores junto al campo y la base no cambia; y Sandra (tiene a Carlos e Iván, aunque Iván esté desactivado) tampoco puede desactivarse.
+- **Dado** Alicia editando a Valeria (3 pacientes), **cuando** le cambia el rol a `supervisor`, **entonces** ve "No puede cambiar el rol de un asesor que tiene pacientes. Primero reasígnelos o libérelos." y la base no cambia; **cuando** solo la desactiva, **entonces** se guarda y sus 3 pacientes siguen asignados a ella.
 - **Dado** el panel, **cuando** se busca una ruta o un botón para borrar cuentas, **entonces** no existe; un `DELETE /cuentas/{id}` enviado a mano no borra nada.
 - **Dado** el correo de Valeria y la contraseña correcta, **cuando** intenta iniciar sesión en el panel, **entonces** ve "Esta cuenta es de asesor. Ingrese desde la aplicación de asesores." y sigue en la página de inicio de sesión, sin sesión.
 - **Dado** el correo de Iván (desactivado) y la contraseña correcta, **cuando** intenta iniciar sesión en el panel, **entonces** ve "Su cuenta está desactivada. Comuníquese con el administrador.".
@@ -686,8 +692,6 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
 - **Dado** el alta de cuenta con contraseña de 5 caracteres, **cuando** se envía, **entonces** el mensaje aparece junto a la contraseña, el resto de los campos conserva lo escrito y el campo de contraseña queda vacío.
 - **Dado** el teléfono `5555-9876` guardado desde la API con `POST /clientes`, **cuando** Alicia crea en el panel un paciente con teléfono `+502 5555 9876`, **entonces** ve "Ya existe un paciente con ese teléfono."; y al revés, un NIT `76543218` guardado en el panel hace que `POST /clientes` con `000-7654321-8` responda 409.
 - **Dado** el código, **cuando** se ejecuta `git grep -n "validate\|Request" laravel/app/Http/Controllers`, **entonces** toda acción que recibe datos usa un FormRequest o `validate`.
-
-**Pregunta abierta:** ¿qué pasa si el administrador cambia el rol de un vendedor que tiene pacientes, o desactiva a un coordinador que tiene asesores? El CHECK de `users` obliga a vaciar `supervisor_id` si deja de ser vendedor, pero sus pacientes quedarían con un `vendedor_id` que ya no es asesor, y los asesores de un coordinador desactivado quedarían sin coordinador que los vea. Propongo rechazar los dos cambios con un mensaje hasta que se reasignen los pacientes o los asesores, pero no lo decide el enunciado ni el reparto.
 
 **Pregunta abierta:** ¿puede el coordinador **editar** los datos de un paciente disponible? Es la misma pregunta abierta de S9; mientras no se decida, L4 y L5 solo dicen que lo **ve** y lo **asigna**.
 
