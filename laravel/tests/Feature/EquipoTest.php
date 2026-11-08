@@ -34,23 +34,41 @@ class EquipoTest extends TestCase
         return User::where('email', $usuario.'@crm.test')->firstOrFail();
     }
 
-    // CA1 (cartera) · Equipo de Sergio: Diego y Valeria, en orden por nombre; ni Carlos ni Iván.
-    public function test_ca1_cartera_del_equipo_de_sergio(): void
+    // CA1 · Equipo de Sergio en octubre: Diego y Valeria, en orden por nombre; ni Carlos ni Iván.
+    public function test_ca1_equipo_de_sergio_en_octubre(): void
     {
         $this->actingAs($this->u('sergio'))->get('/equipo?mes=2026-10')
             ->assertOk()
             ->assertSee('Ventas de octubre 2026')
-            ->assertSeeInOrder(['Diego Castillo', '2 de 10', 'Valeria López', '3 de 10'])
+            ->assertSeeInOrder([
+                'Diego Castillo', '2 de 10', '>1<', 'Q6,000.00',
+                'Valeria López', '3 de 10', '>2<', 'Q9,250.00',
+            ], false)
             ->assertDontSee('Carlos Ajú')
             ->assertDontSee('Iván Toj');
     }
 
-    // CA3 (cartera) · Equipo de Sandra con un asesor desactivado.
-    public function test_ca3_cartera_del_equipo_de_sandra_con_desactivado(): void
+    // CA2 · Equipo de Sergio en noviembre: "Equipo para sucursal" (03:30 UTC del 1 nov) es de noviembre.
+    public function test_ca2_equipo_de_sergio_en_noviembre(): void
+    {
+        $this->actingAs($this->u('sergio'))->get('/equipo?mes=2026-11')
+            ->assertOk()
+            ->assertSee('Ventas de noviembre 2026')
+            ->assertSeeInOrder([
+                'Diego Castillo', '2 de 10', '>0<', 'Q0.00',
+                'Valeria López', '3 de 10', '>1<', 'Q3,600.00',
+            ], false);
+    }
+
+    // CA3 · Equipo de Sandra en octubre, con un asesor desactivado.
+    public function test_ca3_equipo_de_sandra_con_desactivado(): void
     {
         $this->actingAs($this->u('sandra'))->get('/equipo?mes=2026-10')
             ->assertOk()
-            ->assertSeeInOrder(['Carlos Ajú', '9 de 10', 'Iván Toj', 'Desactivado', '1 de 10'])
+            ->assertSeeInOrder([
+                'Carlos Ajú', '9 de 10', '>1<', 'Q7,200.00',
+                'Iván Toj', 'Desactivado', '1 de 10', '>0<', 'Q0.00',
+            ], false)
             ->assertDontSee('Valeria López')
             ->assertDontSee('Diego Castillo');
     }
@@ -110,5 +128,24 @@ class EquipoTest extends TestCase
     public function test_ca8_sin_sesion_redirige_al_login(): void
     {
         $this->get('/equipo')->assertRedirect(route('login'));
+    }
+
+    // CA9 · XSS: el nombre del asesor se muestra literal.
+    public function test_ca9_nombre_del_asesor_se_muestra_literal(): void
+    {
+        $nombre = '<img src=x onerror=alert(1)>';
+        User::forceCreate([
+            'name' => $nombre,
+            'email' => 'xss@crm.test',
+            'password' => 'no-se-usa',
+            'rol' => 'vendedor',
+            'activo' => true,
+            'supervisor_id' => $this->u('sergio')->id,
+        ]);
+
+        $this->actingAs($this->u('sergio'))->get('/equipo?mes=2026-10')
+            ->assertOk()
+            ->assertSee($nombre)                  // escapado
+            ->assertDontSee($nombre, false);      // nunca crudo
     }
 }

@@ -30,6 +30,8 @@
                         <tr>
                             <th class="px-4 py-3">Asesor</th>
                             <th class="px-4 py-3">Cartera</th>
+                            <th class="px-4 py-3 text-right">Ventas del mes</th>
+                            <th class="px-4 py-3 text-right">Total vendido</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -42,10 +44,12 @@
                                     @endunless
                                 </td>
                                 <td class="px-4 py-3">{{ $asesor->cartera }} de {{ Cartera::MAXIMO }}</td>
+                                <td class="px-4 py-3 text-right">{{ $asesor->ventas }}</td>
+                                <td class="px-4 py-3 text-right">{{ Formato::quetzales($asesor->total) }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="2" class="px-4 py-6 text-center text-gray-500">Su equipo todavía no tiene asesores.</td>
+                                <td colspan="4" class="px-4 py-6 text-center text-gray-500">Su equipo todavía no tiene asesores.</td>
                             </tr>
                         @endforelse
                     </tbody>
