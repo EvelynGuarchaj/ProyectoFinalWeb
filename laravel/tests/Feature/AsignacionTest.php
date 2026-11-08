@@ -189,4 +189,115 @@ class AsignacionTest extends TestCase
 
         $this->assertSame(10, $this->cartera('carlos'));
     }
+
+    // CA1 · Asignar hasta 10 desde el panel
+
+    private function asignar(string $actor, string $paciente, mixed $vendedorId, string $desde = '/clientes')
+    {
+        $datos = $vendedorId === null ? [] : ['vendedor_id' => $vendedorId];
+
+        return $this->actingAs($this->u($actor))->from($desde)
+            ->patch('/clientes/'.$this->paciente($paciente)->id.'/asignar', $datos);
+    }
+
+    public function test_ca1_sandra_asigna_a_carlos_hasta_10(): void
+    {
+        $carlos = $this->u('carlos');
+        $agencia = $this->paciente('Agencia Cuatro Caminos');
+
+        $this->asignar('sandra', 'Agencia Cuatro Caminos', $carlos->id)
+            ->assertRedirect('/clientes')
+            ->assertSessionHas('status', 'El paciente se asignó correctamente.');
+        $this->assertSame($carlos->id, $agencia->refresh()->vendedor_id);
+        $this->assertSame(10, $this->cartera('carlos'));
+
+        $escuela = $this->paciente('Escuela Futuro');
+        $this->asignar('sandra', 'Escuela Futuro', $carlos->id)
+            ->assertRedirect('/clientes')
+            ->assertSessionHasErrors(['vendedor_id' => Cartera::CARTERA_LLENA], null, 'asignar'.$escuela->id);
+        $this->assertNull($escuela->refresh()->vendedor_id);
+        $this->assertSame(10, $this->cartera('carlos'));
+    }
+
+    // CA2 · Asesor ajeno o desactivado
+
+    public function test_ca2_sergio_no_asigna_a_carlos_ivan_ni_vacio(): void
+    {
+        $escuela = $this->paciente('Escuela Futuro');
+
+        foreach ([$this->u('carlos')->id, $this->u('ivan')->id, null, 'abc'] as $destino) {
+            $this->asignar('sergio', 'Escuela Futuro', $destino)
+                ->assertRedirect('/clientes')
+                ->assertSessionHasErrors(['vendedor_id' => Cartera::ASESOR_NO_VALIDO], null, 'asignar'.$escuela->id);
+            $this->assertNull($escuela->refresh()->vendedor_id);
+        }
+    }
+
+    // CA3 · Paciente ajeno da 404
+
+    public function test_ca3_sergio_no_asigna_paciente_ajeno(): void
+    {
+        $abarrotes = $this->paciente('Abarrotes San Juan');
+
+        $this->asignar('sergio', 'Abarrotes San Juan', $this->u('valeria')->id)->assertNotFound();
+        $this->assertSame($this->u('carlos')->id, $abarrotes->refresh()->vendedor_id);
+
+        $this->actingAs($this->u('sergio'))
+            ->patch('/clientes/999999/asignar', ['vendedor_id' => $this->u('valeria')->id])
+            ->assertNotFound();
+    }
+
+    // CA6 · Selector
+
+    public function test_ca6_selector_de_sergio_y_de_alicia(): void
+    {
+        $r = $this->actingAs($this->u('sergio'))->get('/clientes')->assertOk();
+        $this->assertSame(['Diego Castillo', 'Valeria López'], $r->viewData('asignables')->pluck('name')->all());
+        $r->assertSee('Diego Castillo (2 de 10)')
+            ->assertSee('Valeria López (3 de 10)')
+            ->assertDontSee('Carlos')
+            ->assertDontSee('Iván Toj (');
+
+        $r = $this->actingAs($this->u('admin'))->get('/clientes')->assertOk();
+        $nombres = $r->viewData('asignables')->pluck('name')->all();
+        $this->assertContains('Carlos Ajú', $nombres);
+        $this->assertNotContains('Iván Toj', $nombres);
+        $r->assertSee('Carlos Ajú (9 de 10)');
+    }
+
+    public function test_ca6_asesor_actual_preseleccionado_en_el_detalle(): void
+    {
+        $valeria = $this->u('valeria');
+        $this->actingAs($this->u('sergio'))
+            ->get('/clientes/'.$this->paciente('Comercial El Quetzal')->id)
+            ->assertOk()
+            ->assertSee('<option value="'.$valeria->id.'" selected>', false);
+    }
+
+    // CA8 · Administrador sin límite de equipo
+
+    public function test_ca8_alicia_asigna_en_los_dos_equipos(): void
+    {
+        $this->asignar('admin', 'Café Zunil', $this->u('carlos')->id)->assertSessionHasNoErrors();
+        $this->asignar('admin', 'Gimnasio Fuerza', $this->u('valeria')->id)->assertSessionHasNoErrors();
+
+        $this->assertSame($this->u('carlos')->id, $this->paciente('Café Zunil')->vendedor_id);
+        $this->assertSame($this->u('valeria')->id, $this->paciente('Gimnasio Fuerza')->vendedor_id);
+    }
+
+    // CA9 · El error sale solo en su fila
+
+    public function test_ca9_error_solo_en_la_fila_del_paciente(): void
+    {
+        $this->asignar('sandra', 'Agencia Cuatro Caminos', $this->u('carlos')->id);
+        $this->asignar('sandra', 'Escuela Futuro', $this->u('carlos')->id);
+
+        $html = $this->actingAs($this->u('sandra'))->get('/clientes?asesor=sin')->assertOk()->getContent();
+
+        $this->assertSame(1, substr_count($html, Cartera::CARTERA_LLENA));
+        $fila = strpos($html, 'Escuela Futuro</a>');
+        $error = strpos($html, Cartera::CARTERA_LLENA);
+        $siguiente = strpos($html, 'Gimnasio Fuerza</a>');
+        $this->assertTrue($fila < $error && $error < $siguiente, 'El error debe salir en la fila de Escuela Futuro.');
+    }
 }

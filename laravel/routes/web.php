@@ -28,6 +28,9 @@ Route::middleware(['auth', 'panel'])->group(function () {
     // Cliente::visiblePara(), así que lo ajeno responde 404.
     Route::middleware('rol:administrador,supervisor')->group(function () {
         Route::resource('clientes', ClienteController::class)->except(['destroy']);
+
+        // Asignar y reasignar (spec 07), con el candado de cartera.
+        Route::patch('clientes/{cliente}/asignar', [ClienteController::class, 'asignar'])->name('clientes.asignar');
     });
 
     // Solo el administrador. Sin show ni destroy: las cuentas no se borran.

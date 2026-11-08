@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Exceptions\CarteraException;
+use App\Http\Requests\AsignarRequest;
 use App\Http\Requests\ClienteRequest;
 use App\Models\Cliente;
 use App\Models\User;
+use App\Services\Cartera;
 use App\Support\Nit;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\QueryException;
@@ -52,6 +55,7 @@ class ClienteController extends Controller
         return view('clientes.index', [
             'clientes' => $clientes,
             'asesores' => $this->asesoresVisibles($usuario),
+            'asignables' => $this->asesoresAsignables($usuario),
             'q' => $q,
             'asesor' => $asesor,
         ]);
@@ -89,6 +93,7 @@ class ClienteController extends Controller
         return view('clientes.show', [
             'cliente' => $cliente,
             'planes' => $planes,
+            'asignables' => $this->asesoresAsignables($request->user()),
         ]);
     }
 
@@ -140,6 +145,25 @@ class ClienteController extends Controller
     }
 
     /**
+     * Asigna un paciente disponible o lo reasigna (spec 07). AsignarRequest ya
+     * respondió 404 si el paciente es ajeno y validó el asesor; Cartera lo vuelve
+     * a comprobar con el candado puesto.
+     */
+    public function asignar(AsignarRequest $request, Cartera $cartera, string $cliente): RedirectResponse
+    {
+        $cliente = Cliente::visiblePara($request->user())->findOrFail($cliente);
+        $vendedor = User::findOrFail($request->validated('vendedor_id'));
+
+        try {
+            $cartera->asignar($cliente, $vendedor, $request->user());
+        } catch (CarteraException $e) {
+            return back()->withErrors([$e->campo ?? 'vendedor_id' => $e->getMessage()], 'asignar'.$cliente->id);
+        }
+
+        return back()->with('status', 'El paciente se asignó correctamente.');
+    }
+
+    /**
      * Un repetido que se coló entre la validación y la escritura: el índice único
      * responde 1062 y el error vuelve junto a su campo, nunca como página de error.
      */
@@ -165,6 +189,20 @@ class ClienteController extends Controller
             ->when(! $usuario->esAdmin(), fn ($c) => $c->where('supervisor_id', $usuario->id))
             ->orderBy('name')
             ->get(['id', 'name', 'activo']);
+    }
+
+    /**
+     * Asesores a los que la persona puede asignar, con su cartera (clientes_count)
+     * para mostrar "x de 10": activos y, para el coordinador, de su equipo.
+     */
+    private function asesoresAsignables(User $usuario): Collection
+    {
+        return User::where('rol', 'vendedor')
+            ->where('activo', 1)
+            ->when($usuario->esSupervisor(), fn ($c) => $c->where('supervisor_id', $usuario->id))
+            ->withCount('clientes')
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /** Escapa los comodines de LIKE (\, % y _) para buscar el texto literal. */
