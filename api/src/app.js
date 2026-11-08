@@ -7,6 +7,7 @@ import { manejarErrores } from './middleware/errores.js';
 import { exigirToken } from './middleware/auth.js';
 import { rutasAuth } from './rutas/auth.js';
 import { rutasYo } from './rutas/yo.js';
+import { rutasClientes } from './rutas/clientes.js';
 
 export const app = express();
 
@@ -31,6 +32,7 @@ api.use('/auth', rutasAuth);
 // Todo lo que sigue exige token. Una ruta inexistente bajo /api sin token responde 401.
 api.use(exigirToken);
 api.use('/yo', rutasYo);
+api.use('/clientes', rutasClientes);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
