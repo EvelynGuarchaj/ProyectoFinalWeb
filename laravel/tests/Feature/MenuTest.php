@@ -15,10 +15,9 @@ class MenuTest extends TestCase
 {
     use RefreshDatabase;
 
-    // productos.index ya existe (spec 04); aquí solo se simulan las que faltan.
+    // productos.index (spec 04) y clientes.index (spec 05) ya existen; aquí solo se simulan las que faltan.
     private const RESERVADAS = [
         'equipo.index' => '/equipo',
-        'clientes.index' => '/clientes',
         'oportunidades.index' => '/oportunidades',
         'reportes.index' => '/reportes',
     ];
@@ -44,18 +43,19 @@ class MenuTest extends TestCase
         Route::getRoutes()->refreshNameLookups();
     }
 
-    public function test_ca19_alicia_ve_cuentas_y_el_saludo(): void
+    // Desde el spec 05, /dashboard redirige a Pacientes, así que el menú se mira en /profile.
+    public function test_ca19_alicia_ve_cuentas_tratamientos_y_pacientes(): void
     {
-        $this->actingAs($this->u('admin@crm.test'))->get('/dashboard')
+        $this->actingAs($this->u('admin@crm.test'))->get('/profile')
             ->assertOk()
             ->assertSee('href="'.route('cuentas.index').'"', false)
             ->assertSee('Cuentas')
-            ->assertSee('Bienvenido(a), Alicia Morales')
             ->assertSee('Perfil')
             ->assertSee('Cerrar sesión')
             ->assertSee('Tratamientos')
+            ->assertSee('Pacientes')
             // Rutas que todavía no existen: sin enlace.
-            ->assertDontSee('Pacientes');
+            ->assertDontSee('Planes de tratamiento');
     }
 
     public function test_ca18_el_coordinador_no_ve_cuentas_ni_tratamientos(): void

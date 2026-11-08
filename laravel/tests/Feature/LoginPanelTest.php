@@ -225,7 +225,7 @@ class LoginPanelTest extends TestCase
     {
         $sergio = $this->cuenta('sergio@crm.test');
         $sandra = User::where('email', 'sandra@crm.test')->firstOrFail();
-        $this->actingAs($sergio)->get('/dashboard')->assertOk();
+        $this->actingAs($sergio)->get('/profile')->assertOk();
 
         // chk_users_supervisor exige coordinador al pasar a vendedor.
         DB::table('users')->where('id', $sergio->id)
