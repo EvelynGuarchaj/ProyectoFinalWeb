@@ -78,7 +78,7 @@ Se agregan con `DB::statement('ALTER TABLE â€¦ ADD CONSTRAINT <nombre> CHECK (â€
 | chk_users_supervisor | users | `(rol = 'vendedor' AND supervisor_id IS NOT NULL) OR (rol <> 'vendedor' AND supervisor_id IS NULL)` | 3.2 |
 | chk_productos_precio | productos | `precio > 0` | 3.3 |
 | chk_clientes_telefono | clientes | `telefono REGEXP '^[2-9][0-9]{7}$'` | 3.4 |
-| chk_clientes_nit | clientes | `nit IS NULL OR nit REGEXP '^[1-9][0-9]*[0-9K]$'` | 3.4 |
+| chk_clientes_nit | clientes | `nit IS NULL OR REGEXP_LIKE(nit, '^[1-9][0-9]*[0-9K]$', 'c')` | 3.4 |
 | chk_oportunidades_motivo | oportunidades | `(etapa = 'perdida') = (motivo_perdida IS NOT NULL)` | 3.5 |
 | chk_oportunidades_motivo_vacio | oportunidades | `motivo_perdida IS NULL OR CHAR_LENGTH(TRIM(motivo_perdida)) BETWEEN 1 AND 255` | 3.5 |
 | chk_oportunidades_cierre | oportunidades | `(etapa IN ('ganada','perdida')) = (fecha_cierre IS NOT NULL)` | 3.5 |
