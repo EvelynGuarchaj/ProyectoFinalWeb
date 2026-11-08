@@ -15,9 +15,9 @@ class MenuTest extends TestCase
 {
     use RefreshDatabase;
 
-    // productos.index (spec 04) y clientes.index (spec 05) ya existen; aquí solo se simulan las que faltan.
+    // productos.index (spec 04), clientes.index (spec 05) y equipo.index (spec 09) ya existen;
+    // aquí solo se simulan las que faltan.
     private const RESERVADAS = [
-        'equipo.index' => '/equipo',
         'oportunidades.index' => '/oportunidades',
         'reportes.index' => '/reportes',
     ];

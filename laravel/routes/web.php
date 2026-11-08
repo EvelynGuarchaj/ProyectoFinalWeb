@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CuentaController;
+use App\Http\Controllers\EquipoController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +33,11 @@ Route::middleware(['auth', 'panel'])->group(function () {
         // Asignar, reasignar y liberar (spec 07), con el candado de cartera.
         Route::patch('clientes/{cliente}/asignar', [ClienteController::class, 'asignar'])->name('clientes.asignar');
         Route::patch('clientes/{cliente}/liberar', [ClienteController::class, 'liberar'])->name('clientes.liberar');
+    });
+
+    // Mi equipo (spec 09, L5): solo el coordinador; el administrador recibe 403.
+    Route::middleware('rol:supervisor')->group(function () {
+        Route::get('equipo', [EquipoController::class, 'index'])->name('equipo.index');
     });
 
     // Solo el administrador. Sin show ni destroy: las cuentas no se borran.
