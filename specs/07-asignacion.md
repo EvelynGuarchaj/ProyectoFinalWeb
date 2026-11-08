@@ -1,6 +1,6 @@
 # 07 · Asignación de pacientes
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 01-esquema-y-semilla (columna `clientes.vendedor_id`, `Oportunidad::ABIERTAS`, `VerificacionSeeder`), 03-cuentas-roles (middleware `panel` y `rol`; `User::esAdmin()`, `esSupervisor()`), 05-pacientes (`ClienteController`, `ClienteRequest`, `Cliente::visiblePara()`, vistas `clientes/` y `ClientesTest`)
 **Fecha:** 2026-11-08
 **Dueña:** A
