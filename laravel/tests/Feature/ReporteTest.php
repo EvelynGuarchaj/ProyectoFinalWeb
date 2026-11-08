@@ -135,6 +135,47 @@ class ReporteTest extends TestCase
         $this->assertSame('2625.38', (string) $this->reporte->totales($this->u('sergio'), '2026-10')->pronostico);
     }
 
+    // ── Servicio: por tratamiento ──────────────────────────────────────────
+
+    /** Tratamientos como nombre => [unidades, total, pronostico] en texto. */
+    private function tratamientos(User $quien, string $mes): array
+    {
+        return $this->reporte->porTratamiento($quien, $mes)
+            ->mapWithKeys(fn (object $f) => [$f->nombre => [(string) $f->unidades, (string) $f->total, (string) $f->pronostico]])
+            ->all();
+    }
+
+    // CA2 · Administrador, octubre: tabla por tratamiento de 11.2, con pronóstico, y su total.
+    public function test_ca2_por_tratamiento_del_administrador(): void
+    {
+        $admin = $this->u('admin');
+
+        $this->assertSame([
+            'Instalación' => ['1', '450.00', '562.50'],
+            'Plan avanzado' => ['2', '5200.00', '6188.63'],
+            'Plan básico' => ['5', '6000.00', '0.00'],
+            'Soporte anual' => ['3', '10800.00', '0.00'],
+        ], $this->tratamientos($admin, '2026-10'));
+
+        $total = $this->reporte->totalPorTratamiento($admin, '2026-10');
+        $this->assertSame(['11', '22450.00', '6751.13'], [(string) $total->unidades, (string) $total->total, (string) $total->pronostico]);
+    }
+
+    // CA4 · Sergio, octubre: solo planes de su equipo; el total cuadra con el del equipo.
+    public function test_ca4_por_tratamiento_de_sergio(): void
+    {
+        $sergio = $this->u('sergio');
+        $filas = $this->tratamientos($sergio, '2026-10');
+
+        $this->assertSame(['5', '6000.00'], array_slice($filas['Plan básico'], 0, 2));
+        $this->assertSame(['2', '5200.00'], array_slice($filas['Plan avanzado'], 0, 2));
+        $this->assertSame(['1', '450.00'], array_slice($filas['Instalación'], 0, 2));
+        $this->assertSame(['1', '3600.00'], array_slice($filas['Soporte anual'], 0, 2));
+
+        $total = $this->reporte->totalPorTratamiento($sergio, '2026-10');
+        $this->assertSame(['15250.00', '2625.38'], [(string) $total->total, (string) $total->pronostico]);
+    }
+
     // Un asesor no ve nada (el reporte es del panel).
     public function test_un_asesor_no_tiene_alcance(): void
     {

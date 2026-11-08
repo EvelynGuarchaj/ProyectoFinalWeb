@@ -29,6 +29,14 @@ class Reporte
         .'ROUND(COALESCE(SUM(p.bruto), 0), 2) AS pronostico';
 
     /**
+     * Unidades, total vendido y pronóstico de un grupo de líneas. El CASE de
+     * probabilidad da 0 a las ganadas: el pronóstico solo suma abiertas.
+     */
+    private const SUMAS_LINEAS = "COALESCE(SUM(CASE WHEN o.etapa = 'ganada' THEN l.cantidad END), 0) AS unidades, "
+        ."COALESCE(SUM(CASE WHEN o.etapa = 'ganada' THEN l.cantidad * l.precio_unitario END), 0) AS total, "
+        .'ROUND(COALESCE(SUM(l.cantidad * l.precio_unitario * ('.self::PROBABILIDAD.')), 0), 2) AS pronostico';
+
+    /**
      * Ventas del mes por asesor (R7): planes ganados cuyo cierre, en hora de
      * Guatemala, cae en el mes. El crédito es de oportunidades.vendedor_id.
      * LEFT JOIN + COUNT(DISTINCT) cuenta cada venta una vez aunque tenga varias
@@ -105,6 +113,47 @@ class Reporte
             ->selectRaw(self::SUMAS)
             ->orderBy('s.name')
             ->get();
+    }
+
+    /**
+     * Una fila por tratamiento con movimiento: unidades y total vendidos en el mes
+     * y pronóstico de sus líneas en planes abiertos (sin filtro de mes), dentro
+     * del alcance. Orden por nombre. El precio es el guardado en la línea; de
+     * productos solo se lee el nombre.
+     */
+    public function porTratamiento(User $quien, string $mes): Collection
+    {
+        return $this->lineas($quien, $mes)
+            ->groupBy('pr.id', 'pr.nombre')
+            ->select('pr.nombre')
+            ->selectRaw(self::SUMAS_LINEAS)
+            ->orderBy('pr.nombre')
+            ->get();
+    }
+
+    /** Fila "Total" de la tabla por tratamiento: la misma consulta sin agrupar. */
+    public function totalPorTratamiento(User $quien, string $mes): object
+    {
+        return $this->lineas($quien, $mes)
+            ->selectRaw(self::SUMAS_LINEAS)
+            ->first();
+    }
+
+    /**
+     * Líneas de los planes del alcance que son ganados del mes o abiertos. Como el
+     * where ya deja solo las ganadas de ese mes, SUMAS_LINEAS no repite el mes.
+     */
+    private function lineas(User $quien, string $mes): Builder
+    {
+        return DB::table('oportunidad_productos as l')
+            ->join('oportunidades as o', 'o.id', '=', 'l.oportunidad_id')
+            ->join('productos as pr', 'pr.id', '=', 'l.producto_id')
+            ->whereIn('o.vendedor_id', User::asesoresVisiblesPara($quien)->select('id'))
+            ->where(fn (Builder $q) => $q
+                ->where(fn (Builder $g) => $g
+                    ->where('o.etapa', 'ganada')
+                    ->whereRaw("DATE_FORMAT(o.fecha_cierre - INTERVAL 6 HOUR, '%Y-%m') = ?", [$mes]))
+                ->orWhereIn('o.etapa', Oportunidad::ABIERTAS));
     }
 
     /**
