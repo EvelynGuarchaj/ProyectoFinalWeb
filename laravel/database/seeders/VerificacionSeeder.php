@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Hash;
  */
 class VerificacionSeeder extends Seeder
 {
+    /** Contraseña pública del enunciado (sección 11). Solo se escribe aquí. */
+    public const CONTRASENA = 'Ventas2026';
+
     /** Fecha final del historial de las oportunidades que siguen abiertas. */
     private const FIN_ABIERTAS = '2026-10-02 16:00:00';
 
@@ -38,7 +41,7 @@ class VerificacionSeeder extends Seeder
     private function cuentas(CarbonImmutable $ahora): array
     {
         // Un solo hash bcrypt para las 7 cuentas.
-        $hash = Hash::make('Ventas2026');
+        $hash = Hash::make(self::CONTRASENA);
 
         $fila = fn (string $nombre, string $correo, string $rol, ?int $supervisorId, bool $activo) => [
             'name' => $nombre,

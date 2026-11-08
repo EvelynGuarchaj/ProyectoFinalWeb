@@ -1,6 +1,6 @@
 # 01 · Esquema y semilla de verificación
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** ninguno (usa el esqueleto de Laravel 13 + Breeze de `panel/entorno` y la sección 3 de `docs/especificacion.md`, ya unidos a `main`)
 **Fecha:** 2026-11-07
 **Dueña:** A

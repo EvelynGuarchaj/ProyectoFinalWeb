@@ -30,7 +30,34 @@ class UserFactory extends Factory
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
             'remember_token' => Str::random(10),
+            // Por omisión, administrador: cumple chk_users_supervisor sin
+            // necesitar otra cuenta (solo el vendedor lleva supervisor).
+            'rol' => 'administrador',
+            'supervisor_id' => null,
+            'activo' => true,
         ];
+    }
+
+    /**
+     * Cuenta de supervisor (en pantalla: Coordinador).
+     */
+    public function supervisor(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'rol' => 'supervisor',
+            'supervisor_id' => null,
+        ]);
+    }
+
+    /**
+     * Cuenta de vendedor (en pantalla: Asesor) a cargo de un supervisor.
+     */
+    public function vendedor(User $supervisor): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'rol' => 'vendedor',
+            'supervisor_id' => $supervisor->id,
+        ]);
     }
 
     /**
