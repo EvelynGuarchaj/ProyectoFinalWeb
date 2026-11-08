@@ -6,6 +6,7 @@ use App\Http\Controllers\EquipoController;
 use App\Http\Controllers\OportunidadController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ReporteController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -41,6 +42,10 @@ Route::middleware(['auth', 'panel'])->group(function () {
         Route::resource('oportunidades', OportunidadController::class)
             ->only(['index', 'show'])
             ->parameters(['oportunidades' => 'oportunidad']);
+
+        // Reporte del mes (spec 14, L6): el administrador ve a todos; el coordinador,
+        // a su equipo. Las cifras salen de MySQL (App\Services\Reporte).
+        Route::get('reportes', [ReporteController::class, 'index'])->name('reportes.index');
     });
 
     // Mi equipo (spec 09, L5): solo el coordinador; el administrador recibe 403.

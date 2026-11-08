@@ -15,11 +15,10 @@ class MenuTest extends TestCase
 {
     use RefreshDatabase;
 
-    // productos.index (spec 04), clientes.index (spec 05), equipo.index (spec 09) y
-    // oportunidades.index (spec 12) ya existen; aquí solo se simulan las que faltan.
-    private const RESERVADAS = [
-        'reportes.index' => '/reportes',
-    ];
+    // productos.index (spec 04), clientes.index (spec 05), equipo.index (spec 09),
+    // oportunidades.index (spec 12) y reportes.index (spec 14) ya existen; aquí
+    // solo se simularían las que faltaran.
+    private const RESERVADAS = [];
 
     protected function setUp(): void
     {
@@ -55,8 +54,9 @@ class MenuTest extends TestCase
             ->assertSee('Pacientes')
             ->assertSee('href="'.route('oportunidades.index').'"', false)
             ->assertSee('Planes de tratamiento')
-            // Ruta que todavía no existe (spec 14): sin enlace.
-            ->assertDontSee('Reporte');
+            // Reporte del mes (spec 14).
+            ->assertSee('href="'.route('reportes.index').'"', false)
+            ->assertSee('Reporte');
     }
 
     public function test_ca18_el_coordinador_no_ve_cuentas_ni_tratamientos(): void
