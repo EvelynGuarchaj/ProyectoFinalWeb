@@ -1,6 +1,6 @@
 # 12 · Planes de tratamiento (solo lectura)
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 01-esquema-y-semilla (tablas `oportunidades`, `oportunidad_productos`, `historial_etapas`, `productos`; modelos `Oportunidad`, `OportunidadProducto`, `HistorialEtapa`; `VerificacionSeeder`), 03-cuentas-roles (middleware `panel` y `rol`; menú con la entrada reservada `oportunidades.index`; `MenuTest`), 05-pacientes (patrón `Cliente::visiblePara()` + `findOrFail()`; vista `clientes/show`; `Formato::quetzales()` y `Formato::fechaGT()`)
 **Fecha:** 2026-11-08
 **Dueña:** A
