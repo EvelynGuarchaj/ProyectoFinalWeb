@@ -344,4 +344,93 @@ class AsignacionTest extends TestCase
         $this->liberar('sergio', 'Abarrotes San Juan')->assertNotFound();
         $this->assertSame($this->u('carlos')->id, $this->paciente('Abarrotes San Juan')->vendedor_id);
     }
+
+    // CA12 · Crear con asesor
+
+    private function nuevo(array $cambios = []): array
+    {
+        return array_merge([
+            'nombre' => 'Paciente Prueba',
+            'nit' => 'CF',
+            'telefono' => '7761-9999',
+            'correo' => '',
+            'vendedor_id' => '',
+        ], $cambios);
+    }
+
+    private function crear(string $actor, array $datos)
+    {
+        return $this->actingAs($this->u($actor))->from('/clientes/create')->post('/clientes', $datos);
+    }
+
+    public function test_ca12_alicia_crea_con_asesor_y_sin_asesor(): void
+    {
+        $valeria = $this->u('valeria');
+
+        $this->crear('admin', $this->nuevo(['vendedor_id' => $valeria->id]))->assertSessionHasNoErrors();
+        $this->assertSame($valeria->id, $this->paciente('Paciente Prueba')->vendedor_id);
+        $this->assertSame(4, $this->cartera('valeria'));
+
+        $this->crear('admin', $this->nuevo(['nombre' => 'Otro Prueba', 'telefono' => '7761-9998']))
+            ->assertSessionHasNoErrors();
+        $this->assertNull($this->paciente('Otro Prueba')->vendedor_id);
+    }
+
+    public function test_ca12_crear_con_asesor_lleno_vuelve_con_lo_escrito(): void
+    {
+        $carlos = $this->u('carlos');
+        $this->asignar('sandra', 'Agencia Cuatro Caminos', $carlos->id);
+        $this->assertSame(10, $this->cartera('carlos'));
+        $total = Cliente::count();
+
+        $this->crear('sandra', $this->nuevo(['vendedor_id' => $carlos->id]))
+            ->assertRedirect('/clientes/create')
+            ->assertSessionHasErrors(['vendedor_id' => Cartera::CARTERA_LLENA])
+            ->assertSessionHasInput('nombre', 'Paciente Prueba')
+            ->assertSessionHasInput('telefono', '7761-9999');
+
+        $this->assertSame($total, Cliente::count());
+        $this->assertSame(10, $this->cartera('carlos'));
+    }
+
+    public function test_ca12_selector_del_alta(): void
+    {
+        $this->actingAs($this->u('sergio'))->get('/clientes/create')
+            ->assertOk()
+            ->assertSeeInOrder(['Disponible (sin asesor)', 'Diego Castillo (2 de 10)', 'Valeria López (3 de 10)'])
+            ->assertDontSee('Carlos Ajú');
+    }
+
+    // CA13 · Crear con asesor ajeno; editar no cambia el asesor
+
+    public function test_ca13_sergio_no_crea_con_carlos_ni_ivan(): void
+    {
+        $total = Cliente::count();
+
+        foreach (['carlos', 'ivan'] as $destino) {
+            $this->crear('sergio', $this->nuevo(['vendedor_id' => $this->u($destino)->id]))
+                ->assertSessionHasErrors(['vendedor_id' => Cartera::ASESOR_NO_VALIDO]);
+        }
+
+        $this->assertSame($total, Cliente::count());
+    }
+
+    public function test_ca13_editar_con_vendedor_id_a_mano_no_cambia_el_asesor(): void
+    {
+        $zunil = $this->paciente('Café Zunil');
+
+        $this->actingAs($this->u('admin'))->put('/clientes/'.$zunil->id, [
+            'nombre' => 'Café Zunil',
+            'nit' => $zunil->nitEnPantalla(),
+            'telefono' => $zunil->telefono,
+            'correo' => $zunil->correo ?? '',
+            'vendedor_id' => $this->u('valeria')->id,
+        ])->assertSessionHasNoErrors();
+
+        $this->assertNull($zunil->refresh()->vendedor_id);
+
+        $this->actingAs($this->u('admin'))->get('/clientes/'.$zunil->id.'/edit')
+            ->assertOk()
+            ->assertDontSee('name="vendedor_id"', false);
+    }
 }

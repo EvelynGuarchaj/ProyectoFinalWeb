@@ -362,13 +362,18 @@ class ClientesTest extends TestCase
         $this->crear($this->nuevo(['nombre' => str_repeat('a', 150)]))->assertSessionHasNoErrors();
     }
 
-    public function test_ca11_vendedor_id_a_mano_se_ignora(): void
+    /**
+     * Desde el spec 07, vendedor_id es un campo válido del alta: ya no se ignora.
+     * Lo que se prueba ahora es que un asesor de otro equipo, escrito a mano, se rechace.
+     */
+    public function test_ca11_vendedor_id_ajeno_a_mano_se_rechaza(): void
     {
-        $valeria = $this->u('valeria@crm.test');
+        $carlos = $this->u('carlos@crm.test');
 
-        $this->crear($this->nuevo(['vendedor_id' => $valeria->id]))->assertSessionHasNoErrors();
+        $this->crear($this->nuevo(['vendedor_id' => $carlos->id]), $this->sergio)
+            ->assertSessionHasErrors(['vendedor_id' => 'Elija un asesor activo de su equipo.']);
 
-        $this->assertDatabaseHas('clientes', ['telefono' => '77619999', 'vendedor_id' => null]);
+        $this->assertDatabaseMissing('clientes', ['telefono' => '77619999']);
     }
 
     public function test_formulario_de_alta(): void
@@ -378,7 +383,8 @@ class ClientesTest extends TestCase
             ->assertSee('Nuevo paciente')
             ->assertSee('Con su dígito verificador, por ejemplo 4521817-K, o CF.')
             ->assertSee('8 dígitos; puede incluir +502.')
-            ->assertDontSee('name="vendedor_id"', false);
+            ->assertSee('name="vendedor_id"', false)     // asesor opcional al crear (spec 07)
+            ->assertSee('Disponible (sin asesor)');
     }
 
     public function test_ca12_sergio_crea_un_paciente_disponible_y_lo_ve(): void

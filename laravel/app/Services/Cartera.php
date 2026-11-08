@@ -55,6 +55,32 @@ class Cartera
     }
 
     /**
+     * Crea un paciente, disponible o ya con asesor (L4: asesor opcional al crear).
+     * Con asesor, el INSERT va después del candado de users, para respetar el orden.
+     * Un NIT o teléfono repetido (1062) sale como QueryException y revierte todo.
+     *
+     * @param  array{nombre: string, nit: ?string, telefono: string, correo: ?string}  $datos
+     *
+     * @throws CarteraException asesor no válido o cartera llena (campo vendedor_id)
+     */
+    public function crear(array $datos, ?User $vendedor, User $actor): Cliente
+    {
+        if ($vendedor === null) {
+            return Cliente::create($datos);
+        }
+
+        return DB::transaction(function () use ($datos, $vendedor, $actor) {
+            $asesor = $this->bloquearAsesor($vendedor->id, $actor);
+            $this->comprobarEspacio($asesor);
+
+            $paciente = (new Cliente($datos))->forceFill(['vendedor_id' => $asesor->id]);
+            $paciente->save();
+
+            return $paciente;
+        });
+    }
+
+    /**
      * Deja disponible a un paciente. Si tiene planes abiertos no se libera
      * (sección 5); los planes cerrados conservan su asesor. No bloquea users:
      * liberar solo resta de una cartera. Empieza en clientes, que respeta el orden.

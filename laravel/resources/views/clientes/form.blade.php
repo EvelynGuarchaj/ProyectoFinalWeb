@@ -30,6 +30,22 @@
     <x-input-error :messages="$errors->get('correo')" class="mt-2" />
 </div>
 
+@if ($cliente === null)
+    {{-- Asesor opcional solo al crear (spec 07). Editar no cambia el asesor. --}}
+    <div>
+        <x-input-label for="vendedor_id" value="Asesor" />
+        <select id="vendedor_id" name="vendedor_id" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm">
+            <option value="">Disponible (sin asesor)</option>
+            @foreach ($asignables as $a)
+                <option value="{{ $a->id }}" @selected((string) old('vendedor_id') === (string) $a->id)>
+                    {{ $a->name }} ({{ $a->clientes_count }} de {{ \App\Services\Cartera::MAXIMO }})
+                </option>
+            @endforeach
+        </select>
+        <x-input-error :messages="$errors->get('vendedor_id')" class="mt-2" />
+    </div>
+@endif
+
 <div class="flex items-center gap-4">
     <x-primary-button>Guardar</x-primary-button>
     <a href="{{ route('clientes.index') }}" class="text-sm text-gray-600 hover:underline">Cancelar</a>

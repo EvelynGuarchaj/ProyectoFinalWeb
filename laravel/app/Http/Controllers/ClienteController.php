@@ -61,16 +61,26 @@ class ClienteController extends Controller
         ]);
     }
 
-    public function create(): View
+    public function create(Request $request): View
     {
-        return view('clientes.create');
+        return view('clientes.create', [
+            'asignables' => $this->asesoresAsignables($request->user()),
+        ]);
     }
 
-    /** El paciente nuevo queda disponible (vendedor_id NULL); asignarlo es del spec 07. */
-    public function store(ClienteRequest $request): RedirectResponse
+    /**
+     * Alta con asesor opcional (spec 07): Cartera::crear() bloquea al asesor,
+     * cuenta su cartera y crea el paciente en la misma transacción.
+     */
+    public function store(ClienteRequest $request, Cartera $cartera): RedirectResponse
     {
+        $vendedorId = $request->validated('vendedor_id');
+        $vendedor = $vendedorId === null ? null : User::findOrFail($vendedorId);
+
         try {
-            $cliente = Cliente::create($request->datos());
+            $cliente = $cartera->crear($request->datos(), $vendedor, $request->user());
+        } catch (CarteraException $e) {
+            return back()->withInput()->withErrors([$e->campo ?? 'vendedor_id' => $e->getMessage()]);
         } catch (QueryException $e) {
             return $this->repetidoPorCarrera($e);
         }
