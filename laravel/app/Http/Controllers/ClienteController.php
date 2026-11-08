@@ -209,8 +209,7 @@ class ClienteController extends Controller
     /** Asesores para el filtro: todos para el administrador; los de su equipo para el coordinador. */
     private function asesoresVisibles(User $usuario): Collection
     {
-        return User::where('rol', 'vendedor')
-            ->when(! $usuario->esAdmin(), fn ($c) => $c->where('supervisor_id', $usuario->id))
+        return User::asesoresVisiblesPara($usuario)
             ->orderBy('name')
             ->get(['id', 'name', 'activo']);
     }

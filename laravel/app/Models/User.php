@@ -6,6 +6,7 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -70,6 +71,16 @@ class User extends Authenticatable
     public function supervisor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+    /**
+     * Asesores que la persona del panel puede ver en los filtros: el administrador,
+     * todos; el coordinador, los de su equipo. Activos y desactivados (spec 05 y spec 12).
+     */
+    public function scopeAsesoresVisiblesPara(Builder $query, User $u): Builder
+    {
+        return $query->where('rol', 'vendedor')
+            ->when(! $u->esAdmin(), fn (Builder $q) => $q->where('supervisor_id', $u->id));
     }
 
     /** Asesores que coordina este supervisor. */
