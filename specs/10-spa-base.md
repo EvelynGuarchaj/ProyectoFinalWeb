@@ -1,6 +1,6 @@
 # 10 · Base de la SPA e inicio de sesión
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 02-api-base-login (`POST /api/auth/login` con sus 200, 401, 403 y 422; middleware que responde 401; CORS con origen exacto `http://127.0.0.1:5500`)
 **Fecha:** 2026-11-08
 **Dueña:** A

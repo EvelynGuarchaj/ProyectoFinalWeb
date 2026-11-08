@@ -65,8 +65,23 @@ _Base cargada con `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo 
 
 ### 2.3 SPA · login, cartera, actividades, resumen y base (A)
 
+_Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `localStorage` y API simulados (respuestas del spec 02). La comprobación en el navegador contra la API real queda pendiente._
+
 | Criterio | Evidencia | Resultado |
 |---|---|---|
+| F1 · Valeria entra: `#/cartera`, su nombre en la barra y solo la clave `sesion` con `token` y `usuario` | `vistas/login.js:47` (`entrar`: `guardarSesion` y `#/cartera`), `sesion.js:17` (guarda solo `{ token, usuario }`), `app.js:88` (nombre escapado); simulación CA1 | Cumple en simulación; pendiente en el navegador |
+| F1 · Coordinador, administrador o asesor desactivado: mensaje del 403 de la API, sigue en `#/login`, `localStorage` vacío | `vistas/login.js:68` (`mostrarError(e)` con el `error` de la API); simulación CA2 | Cumple en simulación; pendiente en el navegador |
+| F1 · Contraseña incorrecta: mensaje del 401, sin el aviso de sesión terminada; 422 junto a cada campo | `api.js:53` (el 401 de `/auth/login` no termina la sesión), `vistas/login.js:62` (422 → `errores` del formulario); simulación CA3 y CA4 | Cumple en simulación; pendiente en el navegador |
+| F1 · "Cerrar sesión" borra la clave `sesion` y muestra `#/login` | `app.js:139` (`salir`); simulación CA5 | Cumple en simulación; pendiente en el navegador |
+| F1 · 401 en plena sesión: borra la sesión, `#/login` y "Su sesión terminó. Ingrese de nuevo." | `api.js:53-63` (aviso con `conservar`), `util.js:69` (`mostrarError` ignora `sesionTerminada`), `app.js:39` (el aviso sobrevive una navegación); simulación CA6 | Cumple en simulación; pendiente con Valeria desactivada desde el panel |
+| F1 · Sin sesión, `#/actividades` → `#/login`; con sesión, `#/login` → `#/cartera` | `app.js:42-51`; simulación CA7 | Cumple en simulación; pendiente en el navegador |
+| F6 · Solo hay escuchadores delegados | `git grep -n "addEventListener\|onclick" frontend/js` → solo `app.js:151` (`click`), `app.js:164` (`submit`) y `app.js:183` (`hashchange` de `window`) | Cumple |
+| F6 · Indicador de carga y botones de envío desactivados con `cargando > 0` | `api.js` (suma al empezar, resta en `finally:67`), `app.js:96` (spinner), `app.js:123` (`disabled`) | Pendiente: "Slow 3G" en el navegador |
+| F6 · API apagada: "No se pudo conectar con el servidor. Verifique que la API esté encendida." con "Reintentar" | `api.js:38` (`ErrorApi` con status 0), `app.js:103` (botón), `app.js:145` (`reintentar`); simulación CA10 | Cumple en simulación; pendiente en el navegador y con el origen `localhost:5500` |
+| F6 · Texto de la API escapado | `util.js:10` (`escapar`); un solo `innerHTML` (`app.js:117`); datos de la API escapados en `app.js:88`, `app.js:110` y `vistas/login.js:27`; `errorCampo` escapa (`util.js:57`). Comprobación con Node de `escapar` | Cumple en el código; pendiente CA11 en el navegador |
+| F6 · Utilidades (`escapar`, `quetzales`, `aISO`, `fechaGT`, `mesActualGT`) | Node: `Q9,250.00`, `2026-12-01T10:00:00-06:00`, `5 oct 2026, 10:00`, `2026-11` | Cumple |
+| F6 · 375 px sin desplazamiento horizontal en `#/login`, `#/cartera`, `#/actividades` y `#/resumen` | `navbar-expand-md`, rejilla de Bootstrap, `.texto-largo`; sin anchos fijos en `css/estilos.css` | Pendiente: modo teléfono en el navegador |
+| F6 · Ruta inexistente (`#/otra`, `#/`, `#/plan`) → `#/cartera`; `#/plan/5` → `params.id === '5'` | `app.js:27` (`leerHash`, con `Object.hasOwn`); simulación CA14 | Cumple en simulación; pendiente en el navegador |
 
 ### 2.4 SPA · embudo y detalle del plan (B)
 
