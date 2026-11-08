@@ -15,8 +15,8 @@ class MenuTest extends TestCase
 {
     use RefreshDatabase;
 
+    // productos.index ya existe (spec 04); aquí solo se simulan las que faltan.
     private const RESERVADAS = [
-        'productos.index' => '/productos',
         'equipo.index' => '/equipo',
         'clientes.index' => '/clientes',
         'oportunidades.index' => '/oportunidades',
@@ -53,8 +53,8 @@ class MenuTest extends TestCase
             ->assertSee('Bienvenido(a), Alicia Morales')
             ->assertSee('Perfil')
             ->assertSee('Cerrar sesión')
+            ->assertSee('Tratamientos')
             // Rutas que todavía no existen: sin enlace.
-            ->assertDontSee('Tratamientos')
             ->assertDontSee('Pacientes');
     }
 
