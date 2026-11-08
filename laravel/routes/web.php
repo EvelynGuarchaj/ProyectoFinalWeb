@@ -39,7 +39,7 @@ Route::middleware(['auth', 'panel'])->group(function () {
         // ni destroy: los planes los trabaja el asesor en la SPA. Cada acción busca con
         // Oportunidad::visiblePara(), así que lo ajeno responde 404.
         Route::resource('oportunidades', OportunidadController::class)
-            ->only(['index'])
+            ->only(['index', 'show'])
             ->parameters(['oportunidades' => 'oportunidad']);
     });
 

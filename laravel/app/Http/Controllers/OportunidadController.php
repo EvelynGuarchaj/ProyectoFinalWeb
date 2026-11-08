@@ -48,4 +48,35 @@ class OportunidadController extends Controller
             'asesor' => $asesor,
         ]);
     }
+
+    /**
+     * Detalle: datos, líneas con el precio guardado y su subtotal (en SQL), total
+     * e historial del más antiguo al más reciente. Lo ajeno o inexistente → 404.
+     */
+    public function show(Request $request, string $oportunidad): View
+    {
+        $plan = Oportunidad::visiblePara($request->user())
+            ->conTotal()
+            ->with(['cliente:id,nombre', 'vendedor:id,name'])
+            ->findOrFail($oportunidad);
+
+        $lineas = $plan->lineas()
+            ->with('producto:id,nombre')
+            ->select('oportunidad_productos.*')
+            ->selectRaw('cantidad * precio_unitario AS subtotal')
+            ->orderBy('id')
+            ->get();
+
+        $historial = $plan->historial()
+            ->with('usuario:id,name')
+            ->orderBy('created_at')
+            ->orderBy('id')
+            ->get();
+
+        return view('oportunidades.show', [
+            'plan' => $plan,
+            'lineas' => $lineas,
+            'historial' => $historial,
+        ]);
+    }
 }

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Oportunidad;
 use App\Models\User;
 use Database\Seeders\VerificacionSeeder;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -151,5 +152,98 @@ class OportunidadesTest extends TestCase
 
         auth()->logout();
         $this->get('/oportunidades')->assertRedirect(route('login'));
+    }
+
+    // CA4 · Detalle con líneas, subtotales, total e historial en orden.
+    public function test_ca4_detalle_con_lineas_e_historial(): void
+    {
+        $plan = $this->plan('Renovación de planes');
+
+        $respuesta = $this->actingAs($this->u('admin'))->get('/oportunidades/'.$plan->id)
+            ->assertOk()
+            ->assertSee('Comercial El Quetzal')
+            ->assertSeeInOrder(['Plan avanzado', '2', 'Q2,600.00', 'Q5,200.00'])
+            ->assertSeeInOrder(['Instalación', '1', 'Q450.00', 'Q450.00'])
+            ->assertSeeInOrder(['Total', 'Q5,650.00'])
+            ->assertSeeInOrder(['Historial de etapas', '—', 'Interesado', 'Valeria López', 'En negociación', 'Aceptado', 'Valeria López']);
+
+        $this->assertSame(5, substr_count($respuesta->getContent(), 'Valeria López</td>'));
+    }
+
+    // CA5 · El motivo del rechazo solo aparece en un plan perdido.
+    public function test_ca5_motivo_del_rechazo(): void
+    {
+        $alicia = $this->actingAs($this->u('admin'));
+
+        $alicia->get('/oportunidades/'.$this->plan('Plan familiar')->id)
+            ->assertOk()
+            ->assertSee('Rechazado')
+            ->assertSeeInOrder(['Motivo del rechazo', 'Eligió a la competencia']);
+
+        $alicia->get('/oportunidades/'.$this->plan('Renovación de planes')->id)
+            ->assertOk()
+            ->assertDontSee('Motivo del rechazo');
+    }
+
+    // CA6 · La línea muestra el precio guardado, no el del catálogo.
+    public function test_ca6_precio_guardado(): void
+    {
+        DB::table('productos')->where('nombre', 'Licencia anterior')->update(['precio' => '1500.00']);
+
+        $this->actingAs($this->u('admin'))->get('/oportunidades/'.$this->plan('Plan familiar')->id)
+            ->assertOk()
+            ->assertSeeInOrder(['Licencia anterior', 'Q999.99', 'Q999.99'])
+            ->assertSee('Q2,199.99')
+            ->assertDontSee('Q1,500.00');
+    }
+
+    // CA7 · Lo ajeno, lo inexistente y lo no numérico responden 404.
+    public function test_ca7_ajeno_responde_404(): void
+    {
+        $sergio = $this->actingAs($this->u('sergio'));
+
+        $sergio->get('/oportunidades/'.$this->plan('Plan anual')->id)->assertNotFound();
+        $sergio->get('/oportunidades/999999')->assertNotFound();
+        $sergio->get('/oportunidades/abc')->assertNotFound();
+
+        $sergio->get('/oportunidades/'.$this->plan('Licencias de caja')->id)->assertOk();
+    }
+
+    // CA9 · Solo lectura: PATCH, PUT y DELETE responden 405 y no cambian nada; sin botones.
+    public function test_ca9_solo_lectura(): void
+    {
+        $plan = $this->plan('Seguimiento anual');
+        $alicia = $this->actingAs($this->u('admin'));
+
+        $alicia->patch('/oportunidades/'.$plan->id, ['titulo' => 'Cambiado', 'etapa' => 'ganada'])->assertStatus(405);
+        $alicia->put('/oportunidades/'.$plan->id, ['titulo' => 'Cambiado'])->assertStatus(405);
+        $alicia->delete('/oportunidades/'.$plan->id)->assertStatus(405);
+
+        $this->assertDatabaseHas('oportunidades', ['id' => $plan->id, 'titulo' => 'Seguimiento anual', 'etapa' => 'prospecto']);
+
+        $alicia->get('/oportunidades/'.$plan->id)
+            ->assertOk()
+            ->assertSee('Este plan todavía no tiene tratamientos.')
+            ->assertSeeInOrder(['Total', 'Q0.00'])
+            ->assertDontSee('Editar')
+            ->assertDontSee('Eliminar')
+            ->assertDontSee('name="_method"', false);
+    }
+
+    // CA11 · XSS: el título se muestra como texto literal en la lista y el detalle.
+    public function test_ca11_xss(): void
+    {
+        $plan = $this->plan('Seguimiento anual');
+        DB::table('oportunidades')->where('id', $plan->id)->update(['titulo' => '<img src=x onerror=alert(1)>']);
+
+        $alicia = $this->actingAs($this->u('admin'));
+
+        $alicia->get('/oportunidades')->assertOk()
+            ->assertSee('&lt;img src=x onerror=alert(1)&gt;', false)
+            ->assertDontSee('<img src=x onerror=alert(1)>', false);
+
+        $alicia->get('/oportunidades/'.$plan->id)->assertOk()
+            ->assertSee('&lt;img src=x onerror=alert(1)&gt;', false)
+            ->assertDontSee('<img src=x onerror=alert(1)>', false);
     }
 }

@@ -51,11 +51,7 @@
                             <tr>
                                 <td class="px-4 py-3">{{ $plan->cliente?->nombre }}</td>
                                 <td class="px-4 py-3">
-                                    @if (Route::has('oportunidades.show'))
-                                        <a href="{{ route('oportunidades.show', $plan->id) }}" class="text-indigo-600 hover:underline">{{ $plan->titulo }}</a>
-                                    @else
-                                        {{ $plan->titulo }}
-                                    @endif
+                                    <a href="{{ route('oportunidades.show', $plan->id) }}" class="text-indigo-600 hover:underline">{{ $plan->titulo }}</a>
                                 </td>
                                 <td class="px-4 py-3">{{ $plan->vendedor?->name }}</td>
                                 <td class="px-4 py-3">{{ Oportunidad::ETAPAS_EN_PANTALLA[$plan->etapa] ?? $plan->etapa }}</td>
