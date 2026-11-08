@@ -433,4 +433,22 @@ class AsignacionTest extends TestCase
             ->assertOk()
             ->assertDontSee('name="vendedor_id"', false);
     }
+
+    // CA15 · XSS
+
+    public function test_ca15_nombre_con_html_asignado_a_valeria_se_ve_literal(): void
+    {
+        $nombre = '<img src=x onerror=alert(1)>';
+        $this->crear('admin', $this->nuevo(['nombre' => $nombre, 'vendedor_id' => $this->u('valeria')->id]))
+            ->assertSessionHasNoErrors();
+        $paciente = $this->paciente($nombre);
+        $this->assertSame($this->u('valeria')->id, $paciente->vendedor_id);
+
+        foreach (['/clientes?q=onerror', '/clientes/'.$paciente->id] as $url) {
+            $this->actingAs($this->u('admin'))->get($url)
+                ->assertOk()
+                ->assertSee($nombre)                  // escapado
+                ->assertDontSee($nombre, false);      // nunca crudo
+        }
+    }
 }
