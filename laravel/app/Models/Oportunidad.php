@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -48,6 +49,40 @@ class Oportunidad extends Model
         return [
             'fecha_cierre' => 'datetime',
         ];
+    }
+
+    /**
+     * Planes que la persona del panel puede ver (L5, S5). El administrador ve todos;
+     * el coordinador, los de los asesores de su equipo (activos o no), según
+     * oportunidades.vendedor_id. Se usa con findOrFail(): lo ajeno responde 404.
+     */
+    public function scopeVisiblePara(Builder $query, User $u): Builder
+    {
+        if ($u->esAdmin()) {
+            return $query;
+        }
+
+        if ($u->esSupervisor()) {
+            return $query->whereIn('oportunidades.vendedor_id', User::select('id')
+                ->where('rol', 'vendedor')
+                ->where('supervisor_id', $u->id));
+        }
+
+        // Expresión fija: nadie más ve planes desde el panel.
+        return $query->whereRaw('1 = 0');
+    }
+
+    /**
+     * Agrega la columna total = SUM(cantidad * precio_unitario) de sus líneas,
+     * calculada en MySQL (withSum no multiplica). Sale como texto DECIMAL;
+     * un plan sin líneas da 0.00. Spec 12, sección 2.2.
+     */
+    public function scopeConTotal(Builder $query): Builder
+    {
+        return $query
+            ->select('oportunidades.*')
+            ->addSelect(['total' => OportunidadProducto::selectRaw('COALESCE(SUM(cantidad * precio_unitario), 0)')
+                ->whereColumn('oportunidad_productos.oportunidad_id', 'oportunidades.id')]);
     }
 
     public function cliente(): BelongsTo

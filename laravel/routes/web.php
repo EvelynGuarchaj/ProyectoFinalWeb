@@ -3,6 +3,7 @@
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CuentaController;
 use App\Http\Controllers\EquipoController;
+use App\Http\Controllers\OportunidadController;
 use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,13 @@ Route::middleware(['auth', 'panel'])->group(function () {
         // Asignar, reasignar y liberar (spec 07), con el candado de cartera.
         Route::patch('clientes/{cliente}/asignar', [ClienteController::class, 'asignar'])->name('clientes.asignar');
         Route::patch('clientes/{cliente}/liberar', [ClienteController::class, 'liberar'])->name('clientes.liberar');
+
+        // Planes de tratamiento (spec 12, L6): solo lectura. Sin create, edit, update
+        // ni destroy: los planes los trabaja el asesor en la SPA. Cada acción busca con
+        // Oportunidad::visiblePara(), así que lo ajeno responde 404.
+        Route::resource('oportunidades', OportunidadController::class)
+            ->only(['index', 'show'])
+            ->parameters(['oportunidades' => 'oportunidad']);
     });
 
     // Mi equipo (spec 09, L5): solo el coordinador; el administrador recibe 403.
