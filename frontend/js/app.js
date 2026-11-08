@@ -1,7 +1,7 @@
 // Base de la SPA: rutas por hash, layout, render y delegación de eventos (docs/plan.md §3).
 import { estado, cambiar, suscribir } from './estado.js';
 import { escapar, mostrarError } from './util.js';
-import { leerSesion } from './sesion.js';
+import { leerSesion, borrarSesion } from './sesion.js';
 import login from './vistas/login.js';
 import cartera from './vistas/cartera.js';
 import embudo from './vistas/embudo.js';
@@ -39,8 +39,13 @@ function leerHash(hash) {
 async function navegar() {
   const { ruta, params } = leerHash(location.hash);
 
-  // Ruta vacía o inexistente → #/cartera.
-  if (!ruta) {
+  // Sin sesión, cualquier ruta lleva a #/login.
+  if (!estado.sesion && ruta !== 'login') {
+    location.hash = '#/login';
+    return;
+  }
+  // Con sesión, #/login, la ruta vacía o una inexistente llevan a #/cartera.
+  if (estado.sesion && (!ruta || ruta === 'login')) {
     location.hash = '#/cartera';
     return;
   }
@@ -131,6 +136,11 @@ const ACCIONES_GLOBALES = {
   cerrarAviso() {
     cambiar({ aviso: null });
   },
+  salir() {
+    borrarSesion();
+    cambiar({ sesion: null, datos: {}, formularios: {}, aviso: null });
+    location.hash = '#/login';
+  },
   // Vuelve a pedir los datos de la vista activa (aviso de API apagada).
   async reintentar() {
     cambiar({ aviso: null });
@@ -167,7 +177,8 @@ app.addEventListener('submit', async (evento) => {
 
 // ---------- Arranque ----------
 
-suscribir(render);
+// Primero la sesión y después el render: así no se dibuja una vista protegida antes de redirigir.
 cambiar({ sesion: leerSesion() });
+suscribir(render);
 window.addEventListener('hashchange', navegar);
 navegar();
