@@ -1,6 +1,6 @@
 # 09 · Mi equipo
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 01-esquema-y-semilla (tablas `users`, `clientes`, `oportunidades`, `oportunidad_productos`; `VerificacionSeeder`), 03-cuentas-roles (middleware `panel` y `rol`; menú con la entrada reservada `equipo.index`; `MenuTest`), 05-pacientes (`Cliente::visiblePara()` y su 404), 07-asignacion (`Cartera::MAXIMO`)
 **Fecha:** 2026-11-08
 **Dueña:** A
