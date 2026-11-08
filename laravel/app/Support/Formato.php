@@ -14,6 +14,22 @@ final class Formato
     /** Meses abreviados, sin depender de APP_LOCALE ni de la extensión intl. */
     private const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 
+    /** Meses completos, para títulos como "Ventas de octubre 2026" (spec 09 y spec 14). */
+    private const MESES_COMPLETOS = [
+        'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+    ];
+
+    /**
+     * '2026-10' → 'octubre 2026'. Recibe un mes ya validado con ^\d{4}-(0[1-9]|1[0-2])$.
+     */
+    public static function mesEnPalabras(string $mes): string
+    {
+        [$anio, $numero] = explode('-', $mes);
+
+        return self::MESES_COMPLETOS[(int) $numero - 1].' '.$anio;
+    }
+
     /**
      * '1200.00' → 'Q1,200.00'; 0 o null → 'Q0.00'.
      */
