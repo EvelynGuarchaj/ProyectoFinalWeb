@@ -25,6 +25,8 @@ class Cartera
 
     public const CARTERA_LLENA = 'Ese asesor ya tiene 10 pacientes, el máximo permitido.';
 
+    public const CON_PLANES_ABIERTOS = 'No se puede liberar: el paciente tiene planes de tratamiento abiertos. Ciérrelos o reasigne al paciente.';
+
     /**
      * Asigna un paciente disponible o lo reasigna. Al reasignar, los planes
      * abiertos pasan al nuevo asesor; los cerrados conservan el suyo (sección 5).
@@ -49,6 +51,35 @@ class Cartera
             Oportunidad::where('cliente_id', $paciente->id)
                 ->whereIn('etapa', Oportunidad::ABIERTAS)
                 ->update(['vendedor_id' => $asesor->id]);
+        });
+    }
+
+    /**
+     * Deja disponible a un paciente. Si tiene planes abiertos no se libera
+     * (sección 5); los planes cerrados conservan su asesor. No bloquea users:
+     * liberar solo resta de una cartera. Empieza en clientes, que respeta el orden.
+     *
+     * @throws CarteraException tiene planes abiertos (sin campo: mensaje de página)
+     * @throws ModelNotFoundException el paciente no existe o el actor no lo ve (404)
+     */
+    public function liberar(Cliente $cliente, User $actor): void
+    {
+        DB::transaction(function () use ($cliente, $actor) {
+            $paciente = $this->bloquearPaciente($cliente->id, $actor);
+
+            if ($paciente->vendedor_id === null) {
+                return; // Ya está disponible.
+            }
+
+            $abiertos = $paciente->oportunidades()
+                ->whereIn('etapa', Oportunidad::ABIERTAS)
+                ->lockForUpdate()
+                ->exists();
+            if ($abiertos) {
+                throw new CarteraException(self::CON_PLANES_ABIERTOS);
+            }
+
+            $paciente->forceFill(['vendedor_id' => null])->save();
         });
     }
 

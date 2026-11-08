@@ -1,4 +1,4 @@
-{{-- Asignar o reasignar un paciente (spec 07). Recibe $cliente y $asignables. --}}
+{{-- Asignar, reasignar y liberar un paciente (spec 07). Recibe $cliente y $asignables. --}}
 @php($error = $errors->getBag('asignar'.$cliente->id)->first('vendedor_id'))
 <div>
     <form method="POST" action="{{ route('clientes.asignar', $cliente->id) }}" class="flex items-center gap-2">
@@ -18,6 +18,13 @@
         </select>
         <x-secondary-button type="submit">Asignar</x-secondary-button>
     </form>
+    @if ($cliente->vendedor_id !== null)
+        <form method="POST" action="{{ route('clientes.liberar', $cliente->id) }}" class="mt-1">
+            @csrf
+            @method('PATCH')
+            <x-secondary-button type="submit">Liberar</x-secondary-button>
+        </form>
+    @endif
     @if ($error)
         <p class="mt-1 text-sm text-red-600">{{ $error }}</p>
     @endif

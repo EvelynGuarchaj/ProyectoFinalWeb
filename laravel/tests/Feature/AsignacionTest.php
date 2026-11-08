@@ -300,4 +300,48 @@ class AsignacionTest extends TestCase
         $siguiente = strpos($html, 'Gimnasio Fuerza</a>');
         $this->assertTrue($fila < $error && $error < $siguiente, 'El error debe salir en la fila de Escuela Futuro.');
     }
+
+    // CA10 · Liberar con plan abierto
+
+    private function liberar(string $actor, string $paciente)
+    {
+        return $this->actingAs($this->u($actor))->from('/clientes')
+            ->patch('/clientes/'.$this->paciente($paciente)->id.'/liberar');
+    }
+
+    public function test_ca10_no_libera_con_plan_abierto(): void
+    {
+        $this->liberar('sergio', 'Ferretería Xela')
+            ->assertRedirect('/clientes')
+            ->assertSessionHas('error', Cartera::CON_PLANES_ABIERTOS);
+        $this->assertSame($this->u('valeria')->id, $this->paciente('Ferretería Xela')->vendedor_id);
+
+        $this->actingAs($this->u('sergio'))->get('/clientes')->assertSee(Cartera::CON_PLANES_ABIERTOS);
+    }
+
+    // CA11 · Liberar con planes cerrados
+
+    public function test_ca11_libera_paciente_con_planes_cerrados(): void
+    {
+        $valeria = $this->u('valeria');
+
+        $this->liberar('sergio', 'María Coyoy')
+            ->assertRedirect('/clientes')
+            ->assertSessionHas('status', 'El paciente quedó disponible.');
+
+        $this->assertNull($this->paciente('María Coyoy')->vendedor_id);
+        $this->assertSame(2, $this->cartera('valeria'));
+        $this->assertSame($valeria->id, $this->plan('Soporte del hogar')->vendedor_id);
+        $this->assertSame([1, '3600.00'], $this->ventas('valeria', '2026-11'));
+
+        $this->actingAs($this->u('sergio'))->get('/clientes?q=Coyoy')
+            ->assertSeeInOrder(['María Coyoy', 'Disponible'])
+            ->assertDontSee('Liberar');
+    }
+
+    public function test_ca11_liberar_paciente_ajeno_da_404(): void
+    {
+        $this->liberar('sergio', 'Abarrotes San Juan')->assertNotFound();
+        $this->assertSame($this->u('carlos')->id, $this->paciente('Abarrotes San Juan')->vendedor_id);
+    }
 }

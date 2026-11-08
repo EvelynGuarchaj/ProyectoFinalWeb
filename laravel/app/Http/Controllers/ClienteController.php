@@ -163,6 +163,20 @@ class ClienteController extends Controller
         return back()->with('status', 'El paciente se asignó correctamente.');
     }
 
+    /** Deja disponible al paciente (spec 07). Con planes abiertos, mensaje de página. */
+    public function liberar(Request $request, Cartera $cartera, string $cliente): RedirectResponse
+    {
+        $cliente = Cliente::visiblePara($request->user())->findOrFail($cliente);
+
+        try {
+            $cartera->liberar($cliente, $request->user());
+        } catch (CarteraException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+
+        return back()->with('status', 'El paciente quedó disponible.');
+    }
+
     /**
      * Un repetido que se coló entre la validación y la escritura: el índice único
      * responde 1062 y el error vuelve junto a su campo, nunca como página de error.
