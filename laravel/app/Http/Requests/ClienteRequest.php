@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Cliente;
 use App\Rules\NitValido;
+use App\Services\Cartera;
 use App\Rules\TelefonoValido;
 use App\Support\Nit;
 use App\Support\Telefono;
@@ -42,12 +43,20 @@ class ClienteRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $reglas = [
             'nombre' => ['bail', 'required', 'string', 'max:150'],
             'nit' => ['bail', 'required', 'string', new NitValido],
             'telefono' => ['bail', 'required', 'string', new TelefonoValido],
             'correo' => ['bail', 'nullable', 'string', 'email', 'max:150'],
         ];
+
+        // Asesor opcional solo al crear (spec 07); vacío = disponible. Al editar no hay
+        // regla, así que validated() no lo trae y la edición nunca cambia el asesor.
+        if ($this->route('cliente') === null) {
+            $reglas['vendedor_id'] = ['bail', 'nullable', 'integer', AsignarRequest::asesorAsignable($this->user())];
+        }
+
+        return $reglas;
     }
 
     /**
@@ -66,6 +75,8 @@ class ClienteRequest extends FormRequest
             'correo.string' => 'Escriba un correo válido.',
             'correo.email' => 'Escriba un correo válido.',
             'correo.max' => 'El correo no puede pasar de 150 caracteres.',
+            'vendedor_id.integer' => Cartera::ASESOR_NO_VALIDO,
+            'vendedor_id.exists' => Cartera::ASESOR_NO_VALIDO,
         ];
     }
 

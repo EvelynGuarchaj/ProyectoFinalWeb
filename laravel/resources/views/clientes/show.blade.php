@@ -37,6 +37,9 @@
                     <div><dt class="text-gray-600">Correo</dt><dd>{{ $cliente->correo ?? '—' }}</dd></div>
                     <div><dt class="text-gray-600">Asesor</dt><dd>{{ $cliente->vendedor?->name ?? 'Disponible' }}</dd></div>
                 </dl>
+                <div class="mt-4 flex flex-wrap items-start gap-3">
+                    @include('clientes._asignar')
+                </div>
             </div>
 
             <div class="bg-white shadow-sm sm:rounded-lg overflow-x-auto">

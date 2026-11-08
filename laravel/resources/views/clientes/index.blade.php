@@ -14,6 +14,9 @@
             @if (session('status'))
                 <div class="p-4 bg-green-50 text-green-800 rounded-md">{{ session('status') }}</div>
             @endif
+            @if (session('error'))
+                <div class="p-4 bg-red-50 text-red-800 rounded-md">{{ session('error') }}</div>
+            @endif
 
             <form method="GET" action="{{ route('clientes.index') }}" class="flex flex-wrap items-end gap-3">
                 <div>
@@ -46,6 +49,7 @@
                             <th class="px-4 py-3">Teléfono</th>
                             <th class="px-4 py-3">Correo</th>
                             <th class="px-4 py-3">Asesor</th>
+                            <th class="px-4 py-3">Acciones</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
@@ -58,10 +62,13 @@
                                 <td class="px-4 py-3">{{ $cliente->telefono }}</td>
                                 <td class="px-4 py-3">{{ $cliente->correo }}</td>
                                 <td class="px-4 py-3">{{ $cliente->vendedor?->name ?? 'Disponible' }}</td>
+                                <td class="px-4 py-3">
+                                    @include('clientes._asignar')
+                                </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-6 text-center text-gray-500">No hay pacientes que coincidan con la búsqueda.</td>
+                                <td colspan="6" class="px-4 py-6 text-center text-gray-500">No hay pacientes que coincidan con la búsqueda.</td>
                             </tr>
                         @endforelse
                     </tbody>
