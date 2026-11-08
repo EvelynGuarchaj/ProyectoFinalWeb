@@ -178,7 +178,7 @@ CONSTRAINT chk_productos_precio CHECK (precio > 0)
 
 ```sql
 CONSTRAINT chk_clientes_telefono CHECK (telefono REGEXP '^[2-9][0-9]{7}$'),
-CONSTRAINT chk_clientes_nit      CHECK (nit IS NULL OR nit REGEXP '^[1-9][0-9]*[0-9K]$')
+CONSTRAINT chk_clientes_nit      CHECK (nit IS NULL OR REGEXP_LIKE(nit, '^[1-9][0-9]*[0-9K]$', 'c'))
 ```
 
 Los CHECK solo revisan la **forma** del NIT (sin ceros a la izquierda y con un verificador de 0 a 9 o K). El dígito verificador del módulo 11 se calcula en el panel y en la API. Un repetido lo detecta primero la validación; si dos peticiones llegan a la vez, el índice único decide: error 1062 → **409** en la API y error junto al campo en el panel.
