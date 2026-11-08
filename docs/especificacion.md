@@ -601,6 +601,7 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
   - **Búsqueda** por nombre o NIT, "contiene". El texto se compara con el nombre tal cual y, compactado igual que un NIT (sección 10), con el NIT, igual que `GET /clientes?q=` de la API.
   - **Filtros:** por asesor (solo los que la persona puede ver) y "Sin asignar". Se combinan con la búsqueda.
 - **Alta y edición.** Nombre (obligatorio, máximo 150), NIT, teléfono, correo (opcional) y, al crear, asesor opcional (vacío = disponible).
+  - **Quién edita** (aclarado después de spec-v1): el administrador edita cualquier paciente; el coordinador edita los de su equipo **y los disponibles** (sin asesor), es decir, todos los que puede ver. Editar no cambia el asesor: eso se hace con asignar, reasignar o liberar. Un paciente de otro equipo sigue respondiendo **404** (S5).
   - El NIT y el teléfono se normalizan con `app/Support/Nit.php` y `Telefono.php` **antes** de validar y de comprobar repetidos, y dan exactamente los resultados de la sección 10.
   - Un repetido se compara ya normalizado y sin contar al propio paciente al editar. Si dos escrituras llegan a la vez, el índice único decide: el error 1062 se convierte en el mensaje junto al campo, nunca en una página de error.
   - Mensajes (los mismos textos que la API): "Escriba un NIT válido (con su dígito verificador) o CF.", "Escriba un teléfono de Guatemala de 8 dígitos.", "Ya existe un paciente con ese NIT.", "Ya existe un paciente con ese teléfono.", "Escriba un correo válido.".
@@ -629,6 +630,7 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
 - **Dado** Sandra, **cuando** reasigna Hotel Los Pinos de Iván (desactivado) a Carlos, **entonces** el cambio se guarda.
 - **Dado** Alicia, **cuando** elimina Café Zunil, **entonces** desaparece de la lista y de `GET /clientes/disponibles`; y **cuando** intenta eliminar Ferretería Xela, **entonces** ve "No se puede eliminar: el paciente tiene planes de tratamiento." y el paciente sigue.
 - **Dado** Sergio, **cuando** envía a mano la petición de eliminar Café Zunil, **entonces** el panel responde **403** y el paciente sigue.
+- **Dado** Sergio, **cuando** edita Café Zunil (disponible) y cambia su nombre, **entonces** el cambio se guarda y Café Zunil sigue disponible (`vendedor_id = NULL`); y **cuando** envía a mano la edición de Abarrotes San Juan (de Carlos), **entonces** el panel responde **404** y nada cambia.
 - El candado frente a la API al mismo tiempo se comprueba en S8 y en la sección 3.
 
 ### L5 · Equipo y visibilidad
@@ -693,7 +695,7 @@ Los criterios usan la semilla de verificación (`php artisan migrate:fresh --see
 - **Dado** el teléfono `5555-9876` guardado desde la API con `POST /clientes`, **cuando** Alicia crea en el panel un paciente con teléfono `+502 5555 9876`, **entonces** ve "Ya existe un paciente con ese teléfono."; y al revés, un NIT `76543218` guardado en el panel hace que `POST /clientes` con `000-7654321-8` responda 409.
 - **Dado** el código, **cuando** se ejecuta `git grep -n "validate\|Request" laravel/app/Http/Controllers`, **entonces** toda acción que recibe datos usa un FormRequest o `validate`.
 
-**Pregunta abierta:** ¿puede el coordinador **editar** los datos de un paciente disponible? Es la misma pregunta abierta de S9; mientras no se decida, L4 y L5 solo dicen que lo **ve** y lo **asigna**.
+**Decidido después de spec-v1:** el coordinador **sí edita** los pacientes disponibles (ver L4, "Quién edita").
 
 **Pregunta abierta:** si un asesor cambia de equipo, ¿sus ventas pasadas se cuentan en el equipo nuevo o en el anterior? L6 las cuenta en el equipo actual (el modelo de datos no guarda el equipo de cada venta). Hay que confirmarlo.
 <!-- fin sección 6 -->
@@ -1048,7 +1050,7 @@ Datos de la semilla que usan las pruebas:
 
 **Pregunta abierta:** en el cambio de etapa simultáneo, la segunda petición espera el candado y luego ve la etapa ya cambiada. Pedir `negociacion` estando en `negociacion` ¿es una transición no permitida (**422**) o un conflicto con el estado actual (**409**)? Depende de la sección 5 (B). La prueba de arriba acepta los dos códigos hasta que B lo decida.
 
-**Pregunta abierta:** ¿puede el coordinador **editar** los datos de un paciente disponible (sin asesor), o solo verlo y asignarlo? El enunciado dice que el coordinador ve los disponibles y los asigna, pero no dice si los edita. La respuesta cambia qué URLs de S5 deben responder 404.
+**Decidido después de spec-v1:** el coordinador **sí edita** los pacientes disponibles (ver L4, "Quién edita").
 <!-- fin sección 9 -->
 
 ## 10. Casos compartidos de NIT y teléfono
