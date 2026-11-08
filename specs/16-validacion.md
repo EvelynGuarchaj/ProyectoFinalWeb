@@ -141,7 +141,7 @@ Las claves exactas se copian de `vendor/laravel/framework/src/Illuminate/Foundat
 
 1. `cd laravel && php artisan lang:publish` (crea `lang/en/`).
 2. Crear `lang/es/{auth,validation,passwords,pagination}.php` y `lang/es.json` según la sección 3.
-3. `config/app.php`: `'locale' => env('APP_LOCALE', 'es')`, `'fallback_locale' => env('APP_FALLBACK_LOCALE', 'es')`. `.env.example`: líneas 7 y 8 con `es`, borrar el `APP_LOCALE=es` repetido de la línea 68. `phpunit.xml`: `<env name="APP_LOCALE" value="es"/>`.
+3. `config/app.php`: `'locale' => env('APP_LOCALE', 'es')`, `'fallback_locale' => env('APP_FALLBACK_LOCALE', 'es')`. `.env.example`: líneas 7 y 8 con `es`, borrar el `APP_LOCALE=es` repetido de la línea 68. `phpunit.xml`: `<env name="APP_LOCALE" value="es"/>` y `<env name="APP_FALLBACK_LOCALE" value="es"/>` (agregado durante la implementación: sin él, el respaldo salía del `.env` de cada integrante y la prueba de D2 dependía de ese archivo).
 4. `novalidate` en el `<form>` de `auth/login`, `cuentas/create`, `cuentas/edit`, `productos/create`, `productos/edit`, `clientes/create`, `clientes/edit` y `profile/partials/update-password-form`. Los atributos `required`, `maxlength` y `type` se quedan (ayudan al teclado del celular y a la accesibilidad).
 5. `CuentaRequest`: `bail` al inicio de cada regla.
 6. `CuentaController@store` y `@update`: atrapar `QueryException` con 1062 sobre `users_email_unique` → `back()->withInput()->withErrors(['email' => 'Ya existe una cuenta con ese correo.'])`; cualquier otro error se vuelve a lanzar (mismo patrón que `ProductoController::nombreRepetido`). `withInput()` no devuelve la contraseña (Laravel la excluye por `$dontFlash`).
