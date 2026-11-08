@@ -4,6 +4,7 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { manejarErrores } from './middleware/errores.js';
+import { rutasAuth } from './rutas/auth.js';
 
 export const app = express();
 
@@ -21,8 +22,10 @@ app.use(
 // Lee los cuerpos JSON. Si el JSON está roto, el error llega a manejarErrores (400).
 app.use(express.json());
 
-// Rutas bajo /api. Se agregan en los pasos 4 y 5 (login, middleware de autenticación y /yo).
+// Rutas bajo /api.
 const api = express.Router();
+// Sin token: solo el inicio de sesión.
+api.use('/auth', rutasAuth);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
