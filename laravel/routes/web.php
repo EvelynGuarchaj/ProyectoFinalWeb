@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\CuentaController;
+use App\Http\Controllers\ProductoController;
 use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 
@@ -27,6 +28,11 @@ Route::middleware(['auth', 'panel'])->group(function () {
         Route::resource('cuentas', CuentaController::class)
             ->except(['show', 'destroy'])
             ->parameters(['cuentas' => 'cuenta']);
+
+        // Tratamientos (spec 04). Sin show ni destroy: se desactivan, no se borran.
+        Route::resource('productos', ProductoController::class)->except(['show', 'destroy']);
+        Route::patch('productos/{producto}/estado', [ProductoController::class, 'cambiarEstado'])
+            ->name('productos.estado');
     });
 });
 
