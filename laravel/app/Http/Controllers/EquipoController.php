@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Support\Mes;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,13 +15,9 @@ use Illuminate\View\View;
  */
 class EquipoController extends Controller
 {
-    private const PATRON_MES = '/^\d{4}-(0[1-9]|1[0-2])$/';
-
-    public const MES_NO_VALIDO = 'Elija un mes válido (AAAA-MM).';
-
     public function index(Request $request): View
     {
-        [$mes, $avisoMes] = $this->mesElegido($request->query('mes'));
+        [$mes, $avisoMes] = Mes::elegido($request->query('mes'));
 
         $asesores = User::query()
             ->select('users.id', 'users.name', 'users.activo')
@@ -49,25 +46,5 @@ class EquipoController extends Controller
             ->whereRaw("DATE_FORMAT(o.fecha_cierre - INTERVAL 6 HOUR, '%Y-%m') = ?", [$mes])
             ->groupBy('o.vendedor_id')
             ->selectRaw('o.vendedor_id, COUNT(DISTINCT o.id) AS ventas, SUM(l.cantidad * l.precio_unitario) AS total');
-    }
-
-    /**
-     * Mes de la consulta (sección 2.1 del spec): ausente o vacío → mes actual
-     * de Guatemala; con formato AAAA-MM → ese mes; cualquier otra cosa → mes
-     * actual con aviso. Devuelve [mes, aviso o null].
-     */
-    private function mesElegido(mixed $valor): array
-    {
-        $actual = now('America/Guatemala')->format('Y-m');
-
-        if ($valor === null || $valor === '') {
-            return [$actual, null];
-        }
-
-        if (is_string($valor) && preg_match(self::PATRON_MES, $valor) === 1) {
-            return [$valor, null];
-        }
-
-        return [$actual, self::MES_NO_VALIDO];
     }
 }
