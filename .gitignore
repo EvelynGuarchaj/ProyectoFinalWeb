@@ -1,0 +1,19 @@
+# Secretos (S2)
+.env
+*.env.local
+# Dependencias
+node_modules/
+laravel/vendor/
+# Compilados de Laravel
+laravel/public/build/
+laravel/public/hot
+laravel/storage/*.key
+laravel/.phpunit.result.cache
+# Claude Code: ajustes personales de cada integrante
+.claude/settings.local.json
+# Copia local del enunciado
+docs/enunciado.*
+# Editores y sistema
+.vscode/
+.idea/
+.DS_Store
