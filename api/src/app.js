@@ -4,7 +4,9 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { manejarErrores } from './middleware/errores.js';
+import { exigirToken } from './middleware/auth.js';
 import { rutasAuth } from './rutas/auth.js';
+import { rutasYo } from './rutas/yo.js';
 
 export const app = express();
 
@@ -26,6 +28,9 @@ app.use(express.json());
 const api = express.Router();
 // Sin token: solo el inicio de sesión.
 api.use('/auth', rutasAuth);
+// Todo lo que sigue exige token. Una ruta inexistente bajo /api sin token responde 401.
+api.use(exigirToken);
+api.use('/yo', rutasYo);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
