@@ -2,12 +2,15 @@
 
 namespace Tests\Feature;
 
+use App\Models\Cliente;
+use App\Models\Producto;
 use App\Models\User;
 use App\Services\Reporte;
 use Database\Seeders\VerificacionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -287,6 +290,66 @@ class ReporteTest extends TestCase
             ->assertOk()
             ->assertSee('&lt;b&gt;x&lt;/b&gt;', false)
             ->assertDontSee('<b>x</b>', false);
+    }
+
+    // ── Casos que mueven datos ─────────────────────────────────────────────
+
+    // CA8 · Cambiar un precio del catálogo no cambia el reporte (precio guardado en la línea).
+    public function test_ca8_cambiar_un_precio_no_cambia_el_reporte(): void
+    {
+        $alicia = $this->u('admin');
+        $plan = Producto::where('nombre', 'Plan avanzado')->firstOrFail();
+
+        $this->actingAs($alicia)->put(route('productos.update', $plan), [
+            'nombre' => $plan->nombre,
+            'precio' => '3000.00',
+            'activo' => $plan->activo ? '1' : '0',
+            'requiere_evaluacion' => $plan->requiere_evaluacion ? '1' : '0',
+        ])->assertSessionHasNoErrors();
+        $this->assertSame('3000.00', (string) $plan->fresh()->precio);
+
+        $this->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSeeInOrder(['Valeria López', 'Sergio Ruiz', '3 de 10', '2', 'Q9,250.00', 'Q2,512.88'])
+            ->assertSeeInOrder(['Toda la clínica', '4', 'Q22,450.00', 'Q6,751.13'])
+            ->assertSeeInOrder(['Plan avanzado', '2', 'Q5,200.00', 'Q6,188.63'])
+            ->assertSeeInOrder(['Total', '11', 'Q22,450.00', 'Q6,751.13']);
+    }
+
+    // CA9 · Prueba central: un plan que Valeria gana hoy aparece en el reporte del mes actual.
+    public function test_ca9_plan_ganado_hoy_aparece_en_el_reporte(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-12-15 18:00:00', 'UTC')); // diciembre, sin otras ventas
+
+        // Como lo hace la SPA al ganar: etapa ganada y fecha de cierre = ahora, en UTC.
+        DB::table('oportunidades')->where('titulo', 'Capacitación de personal')->update([
+            'etapa' => 'ganada',
+            'fecha_cierre' => now()->utc()->format('Y-m-d H:i:s'),
+        ]);
+
+        // Instalación 2 × Q450.00 = Q900.00. Sale del pronóstico: 2750.50 × 0.75 = 2062.875 → Q2,062.88.
+        $this->actingAs($this->u('admin'))->get('/reportes')
+            ->assertOk()
+            ->assertSee('Reporte de diciembre 2026')
+            ->assertSeeInOrder(['Valeria López', 'Sergio Ruiz', '3 de 10', '1', 'Q900.00', 'Q2,062.88'])
+            ->assertSeeInOrder(['Por tratamiento', 'Instalación', '2', 'Q900.00']);
+    }
+
+    // CA13 · Reasignación (L4): los cerrados se quedan con Valeria; los abiertos pasan a Diego.
+    public function test_ca13_reasignacion_en_el_reporte(): void
+    {
+        $sergio = $this->u('sergio');
+        $quetzal = Cliente::where('nombre', 'Comercial El Quetzal')->firstOrFail();
+
+        $this->actingAs($sergio)
+            ->patch(route('clientes.asignar', $quetzal), ['vendedor_id' => $this->u('diego')->id])
+            ->assertSessionHasNoErrors();
+
+        $this->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSeeInOrder(['Diego Castillo', '3 de 10', '1', 'Q6,000.00', 'Q2,175.38'])
+            ->assertSeeInOrder(['Valeria López', '2 de 10', '2', 'Q9,250.00', 'Q450.00'])
+            ->assertSeeInOrder(['Total del equipo', '3', 'Q15,250.00', 'Q2,625.38']);
     }
 
     // Un asesor no ve nada (el reporte es del panel).
