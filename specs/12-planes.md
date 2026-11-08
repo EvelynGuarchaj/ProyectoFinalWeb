@@ -168,7 +168,7 @@ En `routes/web.php`, dentro del grupo `auth` + `panel` y del grupo `rol:administ
 
 ### 2.8 Enlace desde el paciente
 
-En `clientes/show.blade.php`, la celda del título pasa de texto a `<a href="{{ route('oportunidades.show', $plan->id) }}">{{ $plan->titulo }}</a>`. Para el coordinador, un plan de un asesor de otro equipo que aparezca en un paciente disponible enlazaría a un 404; en ese caso el título se muestra sin enlace (se compara `$plan->vendedor?->supervisor_id` con el coordinador, o se calcula en el controlador la lista de ids visibles con `Oportunidad::visiblePara()`).
+En `clientes/show.blade.php`, la celda del título pasa de texto a `<a href="{{ route('oportunidades.show', $plan->id) }}">{{ $plan->titulo }}</a>`. Para el coordinador, un plan de un asesor de otro equipo que aparezca en un paciente disponible enlazaría a un 404; en ese caso el título se muestra sin enlace. `ClienteController@show` calcula los ids visibles con `Oportunidad::visiblePara($usuario)->where('cliente_id', $cliente->id)->pluck('id')` y la vista enlaza solo esos.
 
 Todo texto en las vistas con `{{ }}`, nunca `{!! !!}`.
 
@@ -179,7 +179,7 @@ Todo texto en las vistas con `{{ }}`, nunca `{!! !!}`.
 Cada paso deja `php artisan test` en verde.
 
 1. **Scopes.** `visiblePara` y `conTotal` en `Oportunidad`. Pruebas de modelo: Alicia ve 11, Sergio 9, Sandra 2, un asesor 0; total de "Renovación de planes" = `5650.00` y de "Seguimiento anual" = `0.00`.
-2. **Ruta, controlador y lista.** `OportunidadController@index` con filtros (2.3), vista `index` (2.6). Mover `asesoresVisibles()` a un lugar común (por ejemplo `User::asesoresVisiblesPara(User $u)` como método estático o scope `User::asesoresDe(User $u)`) y usarlo en `ClienteController` y aquí. Quitar `oportunidades.index` de `RESERVADAS` en `MenuTest`. Pruebas CA1, CA2, CA3, CA8, CA9, CA10.
+2. **Ruta, controlador y lista.** `OportunidadController@index` con filtros (2.3), vista `index` (2.6). Mover `asesoresVisibles()` al scope `User::asesoresVisiblesPara(User $u)` y usarlo en `ClienteController` y aquí. Quitar `oportunidades.index` de `RESERVADAS` en `MenuTest`. Pruebas CA1, CA2, CA3, CA8, CA9, CA10.
 3. **Detalle.** `OportunidadController@show` (2.4) y vista `show` (2.7). Pruebas CA4, CA5, CA6, CA7, CA11.
 4. **Enlace desde el paciente** (2.8). Prueba CA12.
 5. **Cierre.** `php artisan route:list --path=oportunidades` (solo dos GET); `git grep -n "{!!" laravel/resources/views/oportunidades` vacío; anotar en `docs/verificacion.md`.
@@ -223,7 +223,8 @@ Salen de los Dado/Cuando/Entonces de L6 (planes), L5 y S5. Semilla: `php artisan
 | Historial del más antiguo al más reciente, "—" en la etapa anterior de la creación | "Creación"; orden descendente | Decidido por la integrante el 2026-11-08: se lee el recorrido de arriba abajo |
 | `Route::resource(...)->only(['index', 'show'])` | Rutas de edición deshabilitadas en la vista | L6: no hay formularios ni rutas para tocar planes; sin ruta, un PATCH a mano responde 405 |
 | Sin enlace implícito de modelo | `Route model binding` | El binding buscaría sin el scope y abriría lo ajeno |
-| Reutilizar la lista de asesores visibles de `ClienteController` | Copiarla | Un solo lugar decide qué asesores ve cada rol |
+| Reutilizar la lista de asesores visibles de `ClienteController` como scope `User::asesoresVisiblesPara(User $u)` | Copiarla; método estático que devuelve la colección | Un solo lugar decide qué asesores ve cada rol. Scope decidido por la integrante el 2026-11-08, mismo estilo que los `visiblePara` |
+| Enlaces desde el paciente: el controlador pasa los ids visibles calculados con `Oportunidad::visiblePara()` | Comparar `supervisor_id` en la vista | Decidido por la integrante el 2026-11-08: el scope es la única fuente de la regla |
 
 ---
 
