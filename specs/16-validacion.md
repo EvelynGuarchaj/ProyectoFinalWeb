@@ -1,6 +1,6 @@
 # 16 · Validación en el servidor
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 03-cuentas-roles (`CuentaRequest`, `LoginRequest`, `PasswordController`), 04-catalogo (`ProductoRequest`), 05-pacientes (`ClienteRequest`, `NitValido`, `TelefonoValido`, `Nit`, `Telefono`), 07-asignacion (`AsignarRequest`, `Cartera`), 12-planes y 14-reporte (listas con paginación y filtros)
 **Fecha:** 2026-11-08
 **Dueña:** A
