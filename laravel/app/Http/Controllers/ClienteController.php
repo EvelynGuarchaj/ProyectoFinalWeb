@@ -6,6 +6,7 @@ use App\Exceptions\CarteraException;
 use App\Http\Requests\AsignarRequest;
 use App\Http\Requests\ClienteRequest;
 use App\Models\Cliente;
+use App\Models\Oportunidad;
 use App\Models\User;
 use App\Services\Cartera;
 use App\Support\Nit;
@@ -100,9 +101,17 @@ class ClienteController extends Controller
             ->orderBy('id')
             ->get(['id', 'titulo', 'etapa', 'vendedor_id', 'cliente_id']);
 
+        // Solo se enlazan los planes que la persona puede abrir (spec 12, 2.8): un paciente
+        // disponible puede tener planes de asesores de otro equipo, que darían 404.
+        $planesVisibles = Oportunidad::visiblePara($request->user())
+            ->where('cliente_id', $cliente->id)
+            ->pluck('id')
+            ->all();
+
         return view('clientes.show', [
             'cliente' => $cliente,
             'planes' => $planes,
+            'planesVisibles' => $planesVisibles,
             'asignables' => $this->asesoresAsignables($request->user()),
         ]);
     }

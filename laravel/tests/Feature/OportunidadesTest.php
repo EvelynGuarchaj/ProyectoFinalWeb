@@ -246,4 +246,36 @@ class OportunidadesTest extends TestCase
             ->assertSee('&lt;img src=x onerror=alert(1)&gt;', false)
             ->assertDontSee('<img src=x onerror=alert(1)>', false);
     }
+
+    // CA12 · Desde el detalle del paciente, el título del plan lleva a su detalle.
+    public function test_ca12_enlace_desde_el_paciente(): void
+    {
+        $plan = $this->plan('Renovación de planes');
+        $cliente = $plan->cliente_id;
+
+        $this->actingAs($this->u('admin'))->get('/clientes/'.$cliente)
+            ->assertOk()
+            ->assertSee('href="'.route('oportunidades.show', $plan->id).'"', false);
+
+        $this->actingAs($this->u('admin'))->get(route('oportunidades.show', $plan->id))
+            ->assertOk()
+            ->assertSee('Renovación de planes');
+    }
+
+    // CA12 (2.8) · Un paciente disponible con planes de otro equipo: el coordinador ve
+    // los títulos sin enlace, porque abrirlos daría 404.
+    public function test_ca12_sin_enlace_a_planes_ajenos(): void
+    {
+        $soporte = $this->plan('Soporte del hogar');
+        DB::table('clientes')->where('id', $soporte->cliente_id)->update(['vendedor_id' => null]);
+
+        $this->actingAs($this->u('sandra'))->get('/clientes/'.$soporte->cliente_id)
+            ->assertOk()
+            ->assertSee('Soporte del hogar')
+            ->assertDontSee('href="'.route('oportunidades.show', $soporte->id).'"', false);
+
+        $this->actingAs($this->u('sergio'))->get('/clientes/'.$soporte->cliente_id)
+            ->assertOk()
+            ->assertSee('href="'.route('oportunidades.show', $soporte->id).'"', false);
+    }
 }

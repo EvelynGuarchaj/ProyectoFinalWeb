@@ -55,7 +55,13 @@
                     <tbody class="divide-y divide-gray-100">
                         @forelse ($planes as $plan)
                             <tr>
-                                <td class="px-4 py-3">{{ $plan->titulo }}</td>
+                                <td class="px-4 py-3">
+                                    @if (in_array($plan->id, $planesVisibles, true))
+                                        <a href="{{ route('oportunidades.show', $plan->id) }}" class="text-indigo-600 hover:underline">{{ $plan->titulo }}</a>
+                                    @else
+                                        {{ $plan->titulo }}
+                                    @endif
+                                </td>
                                 <td class="px-4 py-3">{{ Oportunidad::ETAPAS_EN_PANTALLA[$plan->etapa] ?? $plan->etapa }}</td>
                                 <td class="px-4 py-3">{{ $plan->vendedor?->name }}</td>
                             </tr>
