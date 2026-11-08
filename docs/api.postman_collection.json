@@ -1,0 +1,454 @@
+{
+  "info": {
+    "name": "CRM Dientecitos Felices · API del asesor",
+    "description": "Pruebas de la API (spec 02 en adelante). Antes de ejecutar: `php artisan migrate:fresh --seeder=VerificacionSeeder`, `npm run dev` en api/, y llenar las variables correo_valeria, correo_sergio, correo_ivan y clave con los datos de VerificacionSeeder. Ejecute la carpeta en orden: unas peticiones usan variables que guardan otras.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Sesión",
+      "description": "A1, A2 y la base de A7: inicio de sesión, middleware y errores en JSON.",
+      "item": [
+        {
+          "name": "1. Login de Valeria → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Las variables correo_valeria y clave están llenas', () => {",
+                  "  pm.expect(pm.collectionVariables.get('correo_valeria'), 'Llene correo_valeria').to.not.be.empty;",
+                  "  pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty;",
+                  "});",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('Trae token y usuario { id, nombre, correo }', () => {",
+                  "  pm.expect(cuerpo.token).to.be.a('string').and.not.be.empty;",
+                  "  pm.expect(Object.keys(cuerpo).sort()).to.eql(['token', 'usuario']);",
+                  "  pm.expect(Object.keys(cuerpo.usuario).sort()).to.eql(['correo', 'id', 'nombre']);",
+                  "});",
+                  "pm.test('El token es HS256 y sub es el id en texto', () => {",
+                  "  const decodificar = (parte) => JSON.parse(atob(parte.replace(/-/g, '+').replace(/_/g, '/')));",
+                  "  const [cabecera, datos] = cuerpo.token.split('.');",
+                  "  pm.expect(decodificar(cabecera).alg).to.eql('HS256');",
+                  "  pm.expect(decodificar(datos).sub).to.eql(String(cuerpo.usuario.id));",
+                  "});",
+                  "",
+                  "const internas = ['password', 'remember_token', 'rol', 'activo', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+                  "pm.test('Sin llaves internas (password, rol, activo…)', () => {",
+                  "  const texto = JSON.stringify(cuerpo);",
+                  "  internas.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+                  "});",
+                  "pm.collectionVariables.set('token', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "2. Valeria con clave incorrecta → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje: Correo o contraseña incorrectos.', () => pm.expect(pm.response.json()).to.eql({ error: 'Correo o contraseña incorrectos.' }));",
+                  "",
+                  "pm.test('No trae token', () => pm.expect(pm.response.json()).to.not.have.property('token'));",
+                  "pm.collectionVariables.set('cuerpo_401', pm.response.text());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}-incorrecta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "3. Correo inexistente → 401 idéntico",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje: Correo o contraseña incorrectos.', () => pm.expect(pm.response.json()).to.eql({ error: 'Correo o contraseña incorrectos.' }));",
+                  "pm.test('Cuerpo idéntico byte por byte al de la petición 2', () => {",
+                  "  const anterior = pm.collectionVariables.get('cuerpo_401');",
+                  "  pm.expect(anterior, 'Ejecute antes la petición 2').to.not.be.empty;",
+                  "  pm.expect(pm.response.text()).to.eql(anterior);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"nadie@no-existe.invalid\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "4. Sergio (coordinador) → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Mensaje: Esta cuenta no es de asesor. Use el panel de la clínica.', () => pm.expect(pm.response.json()).to.eql({ error: 'Esta cuenta no es de asesor. Use el panel de la clínica.' }));",
+                  "",
+                  "pm.test('No trae token', () => pm.expect(pm.response.json()).to.not.have.property('token'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_sergio}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "5. Iván (desactivado) → 403",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 403', () => pm.response.to.have.status(403));",
+                  "pm.test('Mensaje: Su cuenta está desactivada. Comuníquese con el administrador.', () => pm.expect(pm.response.json()).to.eql({ error: 'Su cuenta está desactivada. Comuníquese con el administrador.' }));",
+                  "",
+                  "pm.test('No trae token', () => pm.expect(pm.response.json()).to.not.have.property('token'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_ivan}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "6. Correo y clave vacíos → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Trae errores.correo y errores.clave', () => {",
+                  "  pm.expect(pm.response.json()).to.eql({",
+                  "    errores: { correo: 'Escriba su correo.', clave: 'Escriba su contraseña.' },",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"\",\n  \"clave\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "7. JSON mal formado → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje: El cuerpo de la petición no es JSON válido.', () => pm.expect(pm.response.json()).to.eql({ error: 'El cuerpo de la petición no es JSON válido.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"correo\":",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{base}}/auth/login"
+          }
+        },
+        {
+          "name": "8. GET /yo con token → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.test('Trae exactamente id, nombre y correo', () => {",
+                  "  pm.expect(Object.keys(cuerpo).sort()).to.eql(['correo', 'id', 'nombre']);",
+                  "  pm.expect(cuerpo.id).to.be.a('number');",
+                  "});",
+                  "",
+                  "const internas = ['password', 'remember_token', 'rol', 'activo', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+                  "pm.test('Sin llaves internas (password, rol, activo…)', () => {",
+                  "  const texto = JSON.stringify(cuerpo);",
+                  "  internas.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base}}/yo"
+          }
+        },
+        {
+          "name": "9. GET /yo sin token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje: Falta el token de acceso.', () => pm.expect(pm.response.json()).to.eql({ error: 'Falta el token de acceso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base}}/yo"
+          }
+        },
+        {
+          "name": "10. GET /yo con el token alterado → 401",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Cambia un carácter en medio de la firma (no el último, que puede tener bits de relleno).",
+                  "const token = pm.collectionVariables.get('token') || '';",
+                  "const i = token.length - 10;",
+                  "const nuevo = token[i] === 'A' ? 'B' : 'A';",
+                  "pm.collectionVariables.set('token_alterado', token.slice(0, i) + nuevo + token.slice(i + 1));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje: El token no es válido o ya venció.', () => pm.expect(pm.response.json()).to.eql({ error: 'El token no es válido o ya venció.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_alterado}}"
+              }
+            ],
+            "url": "{{base}}/yo"
+          }
+        },
+        {
+          "name": "11. Ruta inexistente con token → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensaje: Ruta no encontrada.', () => pm.expect(pm.response.json()).to.eql({ error: 'Ruta no encontrada.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "url": "{{base}}/nada"
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "pm.test('La respuesta es JSON', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base",
+      "value": "http://localhost:3000/api"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "correo_valeria",
+      "value": ""
+    },
+    {
+      "key": "correo_sergio",
+      "value": ""
+    },
+    {
+      "key": "correo_ivan",
+      "value": ""
+    },
+    {
+      "key": "clave",
+      "value": ""
+    },
+    {
+      "key": "cuerpo_401",
+      "value": ""
+    },
+    {
+      "key": "token_alterado",
+      "value": ""
+    }
+  ]
+}
