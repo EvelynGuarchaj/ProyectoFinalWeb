@@ -176,6 +176,119 @@ class ReporteTest extends TestCase
         $this->assertSame(['15250.00', '2625.38'], [(string) $total->total, (string) $total->pronostico]);
     }
 
+    // ── Página /reportes ───────────────────────────────────────────────────
+
+    // CA1 · Alicia, octubre: filas por asesor, por equipo y toda la clínica en pantalla.
+    public function test_ca1_pagina_del_administrador(): void
+    {
+        $this->actingAs($this->u('admin'))->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSee('Reporte de octubre 2026')
+            ->assertSee('Coordinador')
+            ->assertSeeInOrder(['Carlos Ajú', 'Sandra Pérez', '9 de 10', '1', 'Q7,200.00', 'Q4,125.75'])
+            ->assertSeeInOrder(['Iván Toj', 'Desactivado', 'Sandra Pérez', '1 de 10', '0', 'Q0.00', 'Q0.00'])
+            ->assertSeeInOrder(['Diego Castillo', 'Sergio Ruiz', '2 de 10', '1', 'Q6,000.00', 'Q112.50'])
+            ->assertSeeInOrder(['Valeria López', 'Sergio Ruiz', '3 de 10', '2', 'Q9,250.00', 'Q2,512.88'])
+            ->assertSeeInOrder(['Toda la clínica', '4', 'Q22,450.00', 'Q6,751.13'])
+            ->assertSeeInOrder(['Por equipo', 'Equipo de Sandra Pérez', '1', 'Q7,200.00', 'Q4,125.75',
+                'Equipo de Sergio Ruiz', '3', 'Q15,250.00', 'Q2,625.38', 'Toda la clínica', '4', 'Q22,450.00', 'Q6,751.13']);
+    }
+
+    // CA2 · Alicia, octubre: tabla por tratamiento con pronóstico y su total.
+    public function test_ca2_pagina_por_tratamiento(): void
+    {
+        $this->actingAs($this->u('admin'))->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSeeInOrder(['Por tratamiento',
+                'Instalación', '1', 'Q450.00', 'Q562.50',
+                'Plan avanzado', '2', 'Q5,200.00', 'Q6,188.63',
+                'Plan básico', '5', 'Q6,000.00', 'Q0.00',
+                'Soporte anual', '3', 'Q10,800.00', 'Q0.00',
+                'Total', '11', 'Q22,450.00', 'Q6,751.13']);
+    }
+
+    // CA3 · Noviembre: Valeria 1 · Q3,600.00 con el mismo pronóstico.
+    public function test_ca3_pagina_noviembre(): void
+    {
+        $this->actingAs($this->u('admin'))->get('/reportes?mes=2026-11')
+            ->assertOk()
+            ->assertSee('Reporte de noviembre 2026')
+            ->assertSeeInOrder(['Valeria López', 'Sergio Ruiz', '3 de 10', '1', 'Q3,600.00', 'Q2,512.88']);
+    }
+
+    // CA4 · Sergio: su equipo, sin columna de coordinador ni tabla por equipo.
+    public function test_ca4_pagina_de_sergio(): void
+    {
+        $this->actingAs($this->u('sergio'))->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSeeInOrder(['Diego Castillo', '2 de 10', '1', 'Q6,000.00', 'Q112.50'])
+            ->assertSeeInOrder(['Valeria López', '3 de 10', '2', 'Q9,250.00', 'Q2,512.88'])
+            ->assertSeeInOrder(['Total del equipo', '3', 'Q15,250.00', 'Q2,625.38'])
+            ->assertSeeInOrder(['Por tratamiento', 'Instalación', '1', 'Q450.00', 'Plan avanzado', '2', 'Q5,200.00',
+                'Plan básico', '5', 'Q6,000.00', 'Soporte anual', '1', 'Q3,600.00', 'Total', 'Q15,250.00', 'Q2,625.38'])
+            ->assertDontSee('Carlos Ajú')
+            ->assertDontSee('Iván Toj')
+            ->assertDontSee('Coordinador')
+            ->assertDontSee('Por equipo')
+            ->assertDontSee('Toda la clínica');
+    }
+
+    // CA5 · Sandra: Carlos e Iván desactivado en 0; total del equipo.
+    public function test_ca5_pagina_de_sandra(): void
+    {
+        $this->actingAs($this->u('sandra'))->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSeeInOrder(['Carlos Ajú', '9 de 10', '1', 'Q7,200.00', 'Q4,125.75'])
+            ->assertSeeInOrder(['Iván Toj', 'Desactivado', '1 de 10', '0', 'Q0.00', 'Q0.00'])
+            ->assertSeeInOrder(['Total del equipo', '1', 'Q7,200.00', 'Q4,125.75'])
+            ->assertDontSee('Valeria López')
+            ->assertDontSee('Diego Castillo');
+    }
+
+    // CA7 · Sin mes: el actual de Guatemala. Mes no válido: aviso y mes actual.
+    public function test_ca7_mes_por_omision_y_no_valido(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-11-01 03:00:00', 'UTC')); // 31 oct en Guatemala
+
+        $this->actingAs($this->u('admin'))->get('/reportes')
+            ->assertOk()
+            ->assertSee('value="2026-10"', false)
+            ->assertSee('Reporte de octubre 2026')
+            ->assertSeeInOrder(['Toda la clínica', '4', 'Q22,450.00', 'Q6,751.13'])
+            ->assertDontSee('Elija un mes válido');
+
+        foreach (['/reportes?mes=2026-13', '/reportes?mes=abc', '/reportes?mes[]=2026-10'] as $url) {
+            $this->get($url)
+                ->assertOk()
+                ->assertSee('Elija un mes válido (AAAA-MM).')
+                ->assertSee('Reporte de octubre 2026');
+        }
+    }
+
+    // CA10 · Menú "Reporte" para administrador y coordinador; sin sesión → login.
+    public function test_ca10_menu_y_acceso(): void
+    {
+        foreach (['admin', 'sergio'] as $quien) {
+            $this->actingAs($this->u($quien))->get('/profile')
+                ->assertOk()
+                ->assertSee('href="'.route('reportes.index').'"', false);
+        }
+
+        auth()->logout();
+        $this->get('/reportes')->assertRedirect('/login');
+    }
+
+    // CA12 · XSS: el nombre de un asesor se muestra como texto.
+    public function test_ca12_nombre_se_escapa(): void
+    {
+        $this->u('diego')->forceFill(['name' => '<b>x</b>'])->save();
+
+        $this->actingAs($this->u('admin'))->get('/reportes?mes=2026-10')
+            ->assertOk()
+            ->assertSee('&lt;b&gt;x&lt;/b&gt;', false)
+            ->assertDontSee('<b>x</b>', false);
+    }
+
     // Un asesor no ve nada (el reporte es del panel).
     public function test_un_asesor_no_tiene_alcance(): void
     {
