@@ -1,4 +1,4 @@
-# Plan · CRM Clínica Dental Sonrisa
+# Plan · CRM Dientecitos Felices
 
 ## 1. Arquitectura
 
