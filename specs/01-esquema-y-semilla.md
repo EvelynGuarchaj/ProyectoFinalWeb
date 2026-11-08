@@ -1,15 +1,13 @@
 # 01 · Esquema y semilla de verificación
 
 **Estado:** Aprobado
-**Depende de:** ninguno (requiere el esqueleto de Laravel 13 + Breeze instalado y `docs/especificacion.md` con la sección 3)
+**Depende de:** ninguno (usa el esqueleto de Laravel 13 + Breeze de `panel/entorno` y la sección 3 de `docs/especificacion.md`, ya unidos a `main`)
 **Fecha:** 2026-11-07
 **Dueña:** A
 **Rama:** `spec-01-esquema-y-semilla`
 **Objetivo:** crear el esquema completo del núcleo en MySQL con migraciones de Laravel, los modelos Eloquent y la semilla de verificación, para que `migrate:fresh --seed` y `migrate:fresh --seeder=VerificacionSeeder` dejen la base lista sin pasos manuales.
 
-**Requisitos que cumple:** L1 (`docs/especificacion.md`; mientras no exista, L1 y secciones 6 y 11 de `docs/enunciado.txt`). Prepara la base para R3 a R7 y la columna de la regla propia.
-
-> ⚠️ **Pendiente:** `docs/especificacion.md` aún no existe. Las expresiones CHECK de este spec son una **propuesta** derivada del enunciado (secciones 6 y 7, R4 y R5). Antes de pasar a *Aprobado* deben coincidir letra por letra con la sección 3 de la especificación; si difieren, manda la especificación.
+**Requisitos que cumple:** L1 y la sección 3 de `docs/especificacion.md` (modelo de datos y dónde se cumple cada regla); mientras la sección 6 (L1) siga pendiente, también las secciones 6 y 11 de `docs/enunciado.txt`. Prepara la base para R3 a R7 y la columna de la regla propia.
 
 ---
 
@@ -72,20 +70,22 @@ El único es el árbitro de dos cambios simultáneos; es válido porque no se pe
 ### 2.7 actividades
 `id`, `cliente_id` FK `cascadeOnDelete`, `vendedor_id` FK → users, `tipo` ENUM('llamada','reunion','tarea'), `descripcion` VARCHAR(500), `vence_en` DATETIME NULL, `completada` BOOLEAN DEFAULT FALSE, timestamps.
 
-### 2.8 Restricciones CHECK (propuesta, confirmar con la sección 3)
-Se agregan con `DB::statement('ALTER TABLE … ADD CONSTRAINT <nombre> CHECK (…)')` después de crear la tabla o columna; el `down()` las quita con `ALTER TABLE … DROP CHECK <nombre>` antes de borrar columnas o tablas.
+### 2.8 Restricciones CHECK (copiadas de la sección 3 de `docs/especificacion.md`)
+Se agregan con `DB::statement('ALTER TABLE … ADD CONSTRAINT <nombre> CHECK (…)')` después de crear la tabla o columna; el `down()` las quita con `ALTER TABLE … DROP CHECK <nombre>` antes de borrar columnas o tablas. Las expresiones son **exactamente** las de la especificación; si una cambia allí, se cambia aquí con una migración nueva.
 
-| Nombre | Tabla | Expresión propuesta | Regla del enunciado |
+| Nombre | Tabla | Expresión (especificación §3) | Sección |
 |---|---|---|---|
-| chk_users_supervisor | users | `(rol = 'vendedor' AND supervisor_id IS NOT NULL) OR (rol <> 'vendedor' AND supervisor_id IS NULL)` | supervisor obligatorio para vendedores, vacío para los demás |
-| chk_productos_precio | productos | `precio > 0` | precio mayor que cero |
-| chk_clientes_telefono | clientes | `telefono REGEXP '^[2-9][0-9]{7}$'` | 8 dígitos que empiezan con 2 a 9 |
-| chk_clientes_nit | clientes | `nit IS NULL OR nit REGEXP '^[1-9][0-9]{0,10}[0-9K]$'` | compacto, 2 a 12 caracteres, sin ceros a la izquierda, verificador 0-9 o K |
-| chk_oportunidades_motivo | oportunidades | `(etapa = 'perdida' AND motivo_perdida IS NOT NULL) OR (etapa <> 'perdida' AND motivo_perdida IS NULL)` | motivo si y solo si perdida |
-| chk_oportunidades_motivo_vacio | oportunidades | `motivo_perdida IS NULL OR CHAR_LENGTH(TRIM(motivo_perdida)) > 0` | motivo de 1 a 255 sin contar espacios |
-| chk_oportunidades_cierre | oportunidades | `(etapa IN ('ganada','perdida') AND fecha_cierre IS NOT NULL) OR (etapa NOT IN ('ganada','perdida') AND fecha_cierre IS NULL)` | fecha de cierre si y solo si cerrada |
-| chk_lineas_cantidad | oportunidad_productos | `cantidad BETWEEN 1 AND 999` | cantidad de 1 a 999 |
-| chk_lineas_precio | oportunidad_productos | `precio_unitario > 0` | precio unitario mayor que cero |
+| chk_users_supervisor | users | `(rol = 'vendedor' AND supervisor_id IS NOT NULL) OR (rol <> 'vendedor' AND supervisor_id IS NULL)` | 3.2 |
+| chk_productos_precio | productos | `precio > 0` | 3.3 |
+| chk_clientes_telefono | clientes | `telefono REGEXP '^[2-9][0-9]{7}$'` | 3.4 |
+| chk_clientes_nit | clientes | `nit IS NULL OR nit REGEXP '^[1-9][0-9]*[0-9K]$'` | 3.4 |
+| chk_oportunidades_motivo | oportunidades | `(etapa = 'perdida') = (motivo_perdida IS NOT NULL)` | 3.5 |
+| chk_oportunidades_motivo_vacio | oportunidades | `motivo_perdida IS NULL OR CHAR_LENGTH(TRIM(motivo_perdida)) BETWEEN 1 AND 255` | 3.5 |
+| chk_oportunidades_cierre | oportunidades | `(etapa IN ('ganada','perdida')) = (fecha_cierre IS NOT NULL)` | 3.5 |
+| chk_lineas_cantidad | oportunidad_productos | `cantidad BETWEEN 1 AND 999` | 3.6 |
+| chk_lineas_precio | oportunidad_productos | `precio_unitario > 0` | 3.6 |
+
+La longitud máxima del NIT (12) la pone la columna `VARCHAR(12)`, no la CHECK.
 
 Lo que una CHECK no puede hacer (y queda en el panel y la API): que `supervisor_id` apunte a una cuenta con rol supervisor, el dígito verificador módulo 11 del NIT, y la cartera máxima de 10.
 
@@ -149,13 +149,13 @@ Tabla de control del historial:
 1. **Migraciones** (en el orden de la sección 2), cada una con `up()` y `down()` simétricos; CHECK con `DB::statement` después de `Schema::create`/`Schema::table`.
 2. **Modelos** (sección 3), empezando por extender `User`.
 3. **Semilla:** `VerificacionSeeder`, `SectorSeeder`, `DatabaseSeeder`.
-4. **Pruebas** (`tests/Feature/EsquemaYSemillaTest.php`) contra una base MySQL de pruebas: conteos, cifras de control y rechazo de cada CHECK.
+4. **Pruebas** (`tests/Feature/EsquemaYSemillaTest.php`) contra la base MySQL de pruebas `crm_test` (ya existe), configurada en `phpunit.xml` (`DB_CONNECTION=mysql`, `DB_DATABASE=crm_test`); no se usa SQLite. Cubren conteos, cifras de control y rechazo de cada CHECK.
 
 ---
 
 ## 6. Criterios de aceptación
 
-Derivados de L1 (y de la sección 11 del enunciado). Se reemplazarán por los Dado/Cuando/Entonces de L1 cuando exista `docs/especificacion.md`.
+Derivados de los criterios de la sección 3 de `docs/especificacion.md` y de la sección 11 del enunciado. Cuando se escriba L1 (sección 6, hoy pendiente), se ajustarán a sus Dado/Cuando/Entonces.
 
 - **CA1 · Esquema completo.** Dado MySQL vacío, cuando se corre `php artisan migrate:fresh`, entonces existen las 7 tablas con sus FK, los únicos (productos.nombre, clientes.nit, clientes.telefono, (oportunidad_id, producto_id), (oportunidad_id, etapa_nueva)) y las 9 CHECK con los nombres de la sección 2.8 (`information_schema.CHECK_CONSTRAINTS`).
 - **CA2 · Migración de users intacta.** `0001_01_01_000000_create_users_table.php` no aparece en el diff (`git diff main -- laravel/database/migrations/0001_01_01_000000_create_users_table.php` vacío).
@@ -184,9 +184,9 @@ Derivados de L1 (y de la sección 11 del enunciado). Se reemplazarán por los Da
 
 ## 8. Riesgos
 
-- **Especificación ausente:** las expresiones CHECK pueden no coincidir con la sección 3 → revisar antes de aprobar.
-- **Pruebas con SQLite:** Laravel prueba por omisión con SQLite, que no acepta `ALTER TABLE … ADD CONSTRAINT … CHECK` ni `REGEXP`. **Decisión pendiente de la integrante:** usar una base MySQL de pruebas (recomendado, p. ej. `crm_test` en `phpunit.xml`) en vez de saltar las CHECK fuera de MySQL, porque saltarlas esconde justo lo que se quiere probar.
+- **Desfase con la especificación:** las CHECK de la sección 2.8 se copiaron de la sección 3. Si la sección 3 cambia, hay que actualizar este spec y agregar una migración nueva (las que ya están en `main` no se editan).
+- **Pruebas con SQLite:** Laravel prueba por omisión con SQLite, que no acepta `ALTER TABLE … ADD CONSTRAINT … CHECK` ni `REGEXP`. **Decidido por la integrante:** las pruebas usan MySQL con la base `crm_test` (ya existe), configurada en `phpunit.xml`; no se saltan las CHECK fuera de MySQL, porque saltarlas esconde justo lo que se quiere probar. Como `RefreshDatabase` borra y recrea las tablas, `crm_test` debe ser una base distinta de la de desarrollo.
 - **Versión de MySQL:** las CHECK se aplican desde MySQL 8.0.16; en versiones anteriores se ignoran en silencio. Verificar con `SELECT VERSION();`.
 - **Orden de inserción de cuentas:** insertar un vendedor antes que su supervisor rompe la FK; la semilla inserta por grupos.
-- **Esqueleto de Laravel incompleto:** a la fecha `laravel/` no tiene `artisan`, `app/` ni `database/migrations/`; hay que reinstalar Laravel 13 + Breeze (Blade) y configurar MySQL con `APP_TIMEZONE=UTC` y `'timezone' => '+00:00'` antes de implementar.
+- **Zona horaria del entorno:** el esqueleto ya trae `APP_TIMEZONE=UTC` en `.env.example` y `'timezone' => '+00:00'` en `config/database.php`. Cada integrante debe tener lo mismo en su `.env` local, o las fechas de la semilla se guardarán corridas.
 - **`updated_at` de oportunidades:** la sección 11 no lo fija; se propone igual a la fecha de su último registro de historial.
