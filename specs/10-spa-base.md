@@ -189,7 +189,7 @@ Semilla: `php artisan migrate:fresh --seeder=VerificacionSeeder`, API encendida 
 - **CA14 · Ruta inexistente.** Dado Valeria con sesión, cuando se abre `#/otra`, `#/` o `#/plan`, entonces la SPA muestra `#/cartera`. Cuando se abre `#/plan/5`, la ruta activa es `plan` con `params.id === '5'` y se ve "Detalle en construcción.".
 - **CA15 · Aviso.** Dado un aviso visible, cuando se pulsa su botón de cerrar, desaparece; y cuando se cambia de vista, desaparece (salvo el de sesión terminada al llegar a `#/login`).
 - **CA16 · Textos.** Dado cualquier pantalla de este spec, todo lo visible está en español y trata de usted; el título de la pestaña termina en "· Dientecitos Felices".
-- **CA17 · Archivos de B intactos.** `git diff main -- frontend/js/vistas/embudo.js frontend/js/vistas/plan.js` está vacío.
+- **CA17 · Archivos de B intactos.** `git diff 44d4e60 -- frontend/js/vistas/embudo.js frontend/js/vistas/plan.js` está vacío.
 
 ---
 
