@@ -122,6 +122,10 @@ function disponiblesHtml(cartera) {
   }
   const filas = cartera.disponibles.map((p) => `<li class="list-group-item d-flex justify-content-between align-items-center gap-2">
       <span class="texto-largo">${escapar(p.nombre)}</span>
+      <form data-form="tomar" class="flex-shrink-0">
+        <input type="hidden" name="id" value="${escapar(p.id)}">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Tomar</button>
+      </form>
     </li>`).join('');
   return `<ul class="list-group list-group-flush">${filas}</ul>`;
 }
@@ -211,6 +215,30 @@ export default {
       const [mios, resumen] = await Promise.all([pedirMios(''), pedirContador()]);
       guardarCartera({ mios, resumen, q: '' });
       // Sin escapar aquí: el layout ya pasa aviso.texto por escapar().
+      cambiar({ aviso: { tipo: 'success', texto: `Se agregó a ${paciente.nombre} a su cartera.` } });
+    },
+
+    // "Tomar" es un submit para que la base lo desactive mientras hay peticiones en curso.
+    async tomar(datos) {
+      const id = datos.id;
+      let paciente;
+      try {
+        paciente = await pedir('POST', `/clientes/${encodeURIComponent(id)}/tomar`);
+      } catch (e) {
+        mostrarError(e);
+        if (e.status === 409 || e.status === 404) {
+          // Otro asesor lo tomó antes, ya no existe o la cartera está llena: se vuelve a pedir la lista.
+          const disponibles = await pedirDisponibles();
+          guardarCartera({ disponibles });
+        }
+        return;
+      }
+
+      // 200: búsqueda limpia, las dos listas y el contador de nuevo.
+      cambiar({ formularios: sinFormularios('buscar') });
+      const [mios, disponibles, resumen] = await Promise.all([pedirMios(''), pedirDisponibles(), pedirContador()]);
+      guardarCartera({ mios, disponibles, resumen, q: '' });
+      // El nombre sale de la respuesta 200, que siempre lo trae (spec 18, riesgos).
       cambiar({ aviso: { tipo: 'success', texto: `Se agregó a ${paciente.nombre} a su cartera.` } });
     }
   }
