@@ -10,6 +10,8 @@ function datosVista() {
   return { pestana: 'pendiente', lista: [], clientes: [], ...(estado.datos.actividades || {}) };
 }
 
+const PESTANAS = ['pendiente', 'completada'];
+
 // Cambia solo estado.datos.actividades, sin tocar lo de las demás vistas.
 function guardarDatos(parcial) {
   cambiar({ datos: { ...estado.datos, actividades: { ...datosVista(), ...parcial } } });
@@ -32,7 +34,7 @@ function pestanas(activa) {
   return `<ul class="nav nav-tabs mb-3">${botones}</ul>`;
 }
 
-function fila(actividad) {
+function fila(actividad, pestana) {
   const vencida = actividad.vencida === true;
   const tipo = Object.hasOwn(TIPOS, actividad.tipo) ? TIPOS[actividad.tipo] : actividad.tipo;
   const fecha = actividad.vence_en
@@ -40,6 +42,10 @@ function fila(actividad) {
     : '<span class="text-muted">Sin fecha</span>';
   const etiquetaVencida = vencida ? ' <span class="badge text-bg-danger">Vencida</span>' : '';
   const paciente = actividad.cliente ? actividad.cliente.nombre : '';
+  const completar = pestana === 'pendiente'
+    ? `<button type="button" class="btn btn-sm btn-outline-success mt-2"
+              data-accion="completar" data-id="${escapar(actividad.id)}">Marcar como completada</button>`
+    : '';
 
   return `<li class="list-group-item${vencida ? ' vencida border-danger' : ''}">
       <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
@@ -48,6 +54,7 @@ function fila(actividad) {
       </div>
       <div class="texto-largo mb-1">${escapar(actividad.descripcion)}</div>
       <div class="small">${fecha}</div>
+      ${completar}
     </li>`;
 }
 
@@ -58,7 +65,7 @@ function lista(datos) {
       : 'No tiene actividades pendientes.';
     return `<p class="text-muted">${texto}</p>`;
   }
-  return `<ul class="list-group">${datos.lista.map(fila).join('')}</ul>`;
+  return `<ul class="list-group">${datos.lista.map((a) => fila(a, datos.pestana)).join('')}</ul>`;
 }
 
 // ---------- Vista ----------
@@ -66,12 +73,14 @@ function lista(datos) {
 export default {
   titulo: 'Actividades',
 
+  // Pide la pestaña guardada (Pendientes la primera vez de la sesión) y los pacientes para el select.
   async cargar(params) {
+    const { pestana } = datosVista();
     const [lista, clientes] = await Promise.all([
-      pedir('GET', '/actividades?estado=pendiente'),
+      pedir('GET', `/actividades?estado=${pestana}`),
       pedir('GET', '/clientes')
     ]);
-    guardarDatos({ pestana: 'pendiente', lista, clientes });
+    guardarDatos({ lista, clientes });
   },
 
   render(estado) {
@@ -85,7 +94,15 @@ export default {
     </div>`;
   },
 
-  acciones: {},
+  acciones: {
+    // Cambia de pestaña: solo vuelve a pedir la lista. La pestaña se guarda cuando llega la respuesta.
+    async pestana(elemento) {
+      const valor = elemento.dataset.valor;
+      if (!PESTANAS.includes(valor)) return;
+      const lista = await pedir('GET', `/actividades?estado=${valor}`);
+      guardarDatos({ pestana: valor, lista });
+    }
+  },
 
   formularios: {}
 };
