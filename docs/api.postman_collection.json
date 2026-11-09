@@ -2022,6 +2022,1686 @@
           }
         }
       ]
+    },
+    {
+      "name": "Planes",
+      "description": "A4, S3, S4, S5 y S8 en las rutas de planes y tratamientos (spec 11). Cambia datos (crea un plan, le agrega y quita un tratamiento y lo cierra como perdida): ejecútela completa y en orden, justo después de `php artisan migrate:fresh --seeder=VerificacionSeeder`. Si se ejecuta dos veces sin recargar la semilla, falla. El plan nuevo termina en perdida, así que no cambia las ventas ni el pronóstico de Valeria. Necesita las variables correo_diego, correo_valeria y clave.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const internasPlanes = ['password', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+              "pm.test('Sin llaves internas (password, vendedor_id, user_id, supervisor_id, usuario_id)', () => {",
+              "  const texto = pm.response.text();",
+              "  internasPlanes.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "1. Login de Diego → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_diego está llena', () => pm.expect(pm.collectionVariables.get('correo_diego'), 'Llene correo_diego').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.collectionVariables.set('token_diego', cuerpo.token);",
+                  "pm.collectionVariables.set('idDiego', cuerpo.usuario.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_diego}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "1b. GET /oportunidades de Diego → guarda idPlanAjeno (Licencias de caja)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json().find((o) => o.titulo === 'Licencias de caja');",
+                  "pm.test('Diego tiene Licencias de caja', () => pm.expect(plan).to.be.an('object'));",
+                  "pm.collectionVariables.set('idPlanAjeno', plan.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades"
+          }
+        },
+        {
+          "name": "1c. GET /clientes de Diego → guarda idClienteAjeno (Farmacia Los Altos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const farmacia = pm.response.json().find((c) => c.nombre === 'Farmacia Los Altos');",
+                  "pm.test('Diego tiene a Farmacia Los Altos', () => pm.expect(farmacia).to.be.an('object'));",
+                  "pm.collectionVariables.set('idClienteAjeno', farmacia.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "2. Login de Valeria → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_valeria está llena', () => pm.expect(pm.collectionVariables.get('correo_valeria'), 'Llene correo_valeria').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.collectionVariables.set('token_valeria', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2b. GET /clientes de Valeria → guarda idClienteValeria (Ferretería Xela)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const xela = pm.response.json().find((c) => c.nombre === 'Ferretería Xela');",
+                  "pm.test('Valeria tiene a Ferretería Xela', () => pm.expect(xela).to.be.an('object'));",
+                  "pm.collectionVariables.set('idClienteValeria', xela.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "3. GET /productos → activos por nombre, sin Licencia anterior",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const productos = pm.response.json();",
+                  "pm.test('Forma Producto: exactamente id, nombre, precio y requiere_evaluacion', () => productos.forEach((p) => {",
+                  "  pm.expect(Object.keys(p).sort()).to.eql(['id', 'nombre', 'precio', 'requiere_evaluacion']);",
+                  "  pm.expect(p.precio).to.be.a('number');",
+                  "  pm.expect(p.requiere_evaluacion).to.be.a('boolean');",
+                  "}));",
+                  "const nombres = productos.map((p) => p.nombre);",
+                  "pm.test('Ordenados por nombre', () => pm.expect(nombres).to.eql([...nombres].sort((a, b) => a.localeCompare(b, 'es'))));",
+                  "pm.test('Licencia anterior (inactivo) no está', () => pm.expect(nombres).to.not.include('Licencia anterior'));",
+                  "const avanzado = productos.find((p) => p.nombre === 'Plan avanzado');",
+                  "const basico = productos.find((p) => p.nombre === 'Plan básico');",
+                  "pm.test('Están Plan avanzado y Plan básico', () => { pm.expect(avanzado).to.be.an('object'); pm.expect(basico).to.be.an('object'); });",
+                  "pm.collectionVariables.set('idPlanAvanzado', avanzado.id);",
+                  "pm.collectionVariables.set('idPlanBasico', basico.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/productos"
+          }
+        },
+        {
+          "name": "4. GET /oportunidades → forma resumen, sin el plan de Diego",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const planes = pm.response.json();",
+                  "pm.test('Hay planes', () => pm.expect(planes).to.be.an('array').that.is.not.empty);",
+                  "pm.test('Forma resumen: exactamente las 8 claves', () => planes.forEach((o) => {",
+                  "  pm.expect(Object.keys(o).sort()).to.eql(['cliente', 'etapa', 'fecha_cierre', 'id', 'motivo_perdida', 'probabilidad', 'titulo', 'total']);",
+                  "  pm.expect(Object.keys(o.cliente).sort()).to.eql(['id', 'nombre']);",
+                  "  pm.expect(o.total).to.be.a('number');",
+                  "}));",
+                  "const renovacion = planes.find((o) => o.titulo === 'Renovación de planes');",
+                  "const familiar = planes.find((o) => o.titulo === 'Plan familiar');",
+                  "pm.test('Están Renovación de planes y Plan familiar', () => { pm.expect(renovacion).to.be.an('object'); pm.expect(familiar).to.be.an('object'); });",
+                  "pm.test('Licencias de caja (de Diego) no aparece', () => pm.expect(planes.map((o) => o.titulo)).to.not.include('Licencias de caja'));",
+                  "pm.collectionVariables.set('idRenovacion', renovacion.id);",
+                  "pm.collectionVariables.set('idPlanFamiliar', familiar.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades"
+          }
+        },
+        {
+          "name": "5. GET /oportunidades?etapa=ganada → solo ganadas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const planes = pm.response.json();",
+                  "pm.test('Hay ganadas', () => pm.expect(planes).to.be.an('array').that.is.not.empty);",
+                  "pm.test('Todas en ganada', () => planes.forEach((o) => pm.expect(o.etapa).to.equal('ganada')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades?etapa=ganada"
+          }
+        },
+        {
+          "name": "5b. GET /oportunidades?etapa=volando → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'El filtro etapa no es válido.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades?etapa=volando"
+          }
+        },
+        {
+          "name": "5c. GET /oportunidades?etapa= (vacío) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'El filtro etapa no es válido.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades?etapa="
+          }
+        },
+        {
+          "name": "6. GET /oportunidades/{{idRenovacion}} → total 5650, precio guardado 2600",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Forma detalle: exactamente las 10 claves', () => pm.expect(Object.keys(plan).sort()).to.eql(['cliente', 'etapa', 'fecha_cierre', 'historial', 'id', 'motivo_perdida', 'probabilidad', 'productos', 'titulo', 'total']));",
+                  "pm.test('Total 5650 (número)', () => pm.expect(plan.total).to.equal(5650));",
+                  "const avanzado = plan.productos.find((l) => l.nombre === 'Plan avanzado');",
+                  "pm.test('Plan avanzado con el precio guardado 2600', () => pm.expect(avanzado.precio_unitario).to.equal(2600));",
+                  "pm.test('Forma de la línea', () => plan.productos.forEach((l) => pm.expect(Object.keys(l).sort()).to.eql(['cantidad', 'id', 'nombre', 'precio_unitario', 'producto_id', 'subtotal'])));",
+                  "pm.test('5 registros de historial, el primero con etapa_anterior null', () => {",
+                  "  pm.expect(plan.historial).to.have.length(5);",
+                  "  pm.expect(plan.historial[0].etapa_anterior).to.equal(null);",
+                  "});",
+                  "pm.test('Forma del historial: usuario es un nombre', () => plan.historial.forEach((h) => {",
+                  "  pm.expect(Object.keys(h).sort()).to.eql(['etapa_anterior', 'etapa_nueva', 'fecha', 'usuario']);",
+                  "  pm.expect(h.usuario).to.be.a('string');",
+                  "}));",
+                  "pm.collectionVariables.set('idLineaRenovacion', avanzado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idRenovacion}}"
+          }
+        },
+        {
+          "name": "7. GET /oportunidades/{{idPlanFamiliar}} → guarda idLicenciaAnterior",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Plan familiar está en perdida', () => pm.expect(plan.etapa).to.equal('perdida'));",
+                  "const licencia = plan.productos.find((l) => l.nombre === 'Licencia anterior');",
+                  "pm.test('Tiene la línea de Licencia anterior', () => pm.expect(licencia).to.be.an('object'));",
+                  "pm.collectionVariables.set('idLicenciaAnterior', licencia.producto_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanFamiliar}}"
+          }
+        },
+        {
+          "name": "8. GET /oportunidades/{{idPlanAjeno}} (de Diego) → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanAjeno}}"
+          }
+        },
+        {
+          "name": "8b. GET /oportunidades/abc → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/abc"
+          }
+        },
+        {
+          "name": "9. POST /oportunidades con un paciente de Diego → 422 cliente_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cliente_id', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cliente_id']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idClienteAjeno}},\n  \"titulo\": \"Plan ajeno\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "9b. POST /oportunidades con cliente_id \"5\" y titulo \"\" → un solo 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cliente_id y titulo', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cliente_id','titulo']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": \"5\",\n  \"titulo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10. POST /oportunidades válido con etapa y vendedor_id → 201 en prospecto",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Forma detalle: exactamente las 10 claves', () => pm.expect(Object.keys(plan).sort()).to.eql(['cliente', 'etapa', 'fecha_cierre', 'historial', 'id', 'motivo_perdida', 'probabilidad', 'productos', 'titulo', 'total']));",
+                  "pm.test('Nace en prospecto (etapa del cuerpo ignorada)', () => {",
+                  "  pm.expect(plan.etapa).to.equal('prospecto');",
+                  "  pm.expect(plan.probabilidad).to.equal(10);",
+                  "});",
+                  "pm.test('Sin tratamientos y total 0', () => {",
+                  "  pm.expect(plan.total).to.equal(0);",
+                  "  pm.expect(plan.productos).to.eql([]);",
+                  "});",
+                  "pm.test('Un registro de historial de creación', () => {",
+                  "  pm.expect(plan.historial).to.have.length(1);",
+                  "  pm.expect(plan.historial[0].etapa_anterior).to.equal(null);",
+                  "  pm.expect(plan.historial[0].etapa_nueva).to.equal('prospecto');",
+                  "  pm.expect(plan.historial[0].usuario).to.equal('Valeria López');",
+                  "});",
+                  "pm.collectionVariables.set('idPlanNuevo', plan.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idClienteValeria}},\n  \"titulo\": \"Plan de Postman\",\n  \"etapa\": \"ganada\",\n  \"vendedor_id\": {{idDiego}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11. PATCH /oportunidades/{{idPlanNuevo}} con titulo \"\" → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con titulo', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['titulo']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11b. PATCH /oportunidades/{{idPlanNuevo}} con título nuevo → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Título nuevo', () => pm.expect(pm.response.json().titulo).to.equal('Plan de Postman editado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"Plan de Postman editado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "12. POST …/productos Plan avanzado con precio_unitario 1 → 201 a 2750.5",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const plan = pm.response.json();",
+                  "const linea = plan.productos.find((l) => l.producto_id === Number(pm.collectionVariables.get('idPlanAvanzado')));",
+                  "pm.test('Precio copiado del catálogo, no del cuerpo', () => {",
+                  "  pm.expect(linea.precio_unitario).to.equal(2750.5);",
+                  "  pm.expect(linea.subtotal).to.equal(2750.5);",
+                  "  pm.expect(plan.total).to.equal(2750.5);",
+                  "});",
+                  "pm.collectionVariables.set('idLineaNueva', linea.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanAvanzado}},\n  \"cantidad\": 1,\n  \"precio_unitario\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "13. POST …/productos Plan avanzado otra vez → 409 repetido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'Ese tratamiento ya está en el plan; cambie su cantidad.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanAvanzado}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14. POST …/productos Licencia anterior (inactivo) → 422 producto_id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con producto_id', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['producto_id']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idLicenciaAnterior}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14b. POST …/productos Plan básico con cantidad 0 → 422 cantidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cantidad', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cantidad']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanBasico}},\n  \"cantidad\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14c. POST …/productos Plan básico con cantidad 1000 → 422 cantidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cantidad', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cantidad']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanBasico}},\n  \"cantidad\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14d. POST …/productos Plan básico con cantidad \"2\" (texto) → 422 cantidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cantidad', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cantidad']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanBasico}},\n  \"cantidad\": \"2\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "15. PATCH …/productos/{{idLineaNueva}} cantidad 3 → 200 recalculado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "const linea = plan.productos.find((l) => l.id === Number(pm.collectionVariables.get('idLineaNueva')));",
+                  "pm.test('Subtotal y total recalculados, mismo precio', () => {",
+                  "  pm.expect(linea.cantidad).to.equal(3);",
+                  "  pm.expect(linea.precio_unitario).to.equal(2750.5);",
+                  "  pm.expect(linea.subtotal).to.equal(8251.5);",
+                  "  pm.expect(plan.total).to.equal(8251.5);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos/{{idLineaNueva}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cantidad\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "15b. PATCH …/productos/{{idLineaNueva}} cantidad 1000 → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con cantidad', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['cantidad']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos/{{idLineaNueva}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cantidad\": 1000\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "16. PATCH …/productos/{{idLineaRenovacion}} (línea de otro plan) → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos/{{idLineaRenovacion}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cantidad\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "16b. DELETE …/productos/{{idLineaRenovacion}} (línea de otro plan) → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos/{{idLineaRenovacion}}"
+          }
+        },
+        {
+          "name": "17. PATCH …/etapa a propuesta (salto) → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ errores: { etapa: 'No se puede pasar de prospecto a propuesta.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "17b. PATCH …/etapa con {} → 422 (sin etapa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ errores: { etapa: 'No se puede pasar de prospecto a (sin etapa).' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "17c. GET /oportunidades/{{idPlanNuevo}} → el historial sigue con 1 registro",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Historial con 1 registro', () => pm.expect(pm.response.json().historial).to.have.length(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}"
+          }
+        },
+        {
+          "name": "18. PATCH …/etapa a calificado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Etapa calificado', () => pm.expect(plan.etapa).to.equal('calificado'));",
+                  "pm.test('Historial con 2 registros, el último prospecto → calificado', () => {",
+                  "  pm.expect(plan.historial).to.have.length(2);",
+                  "  const ultimo = plan.historial[plan.historial.length - 1];",
+                  "  pm.expect(ultimo.etapa_anterior).to.equal('prospecto');",
+                  "  pm.expect(ultimo.etapa_nueva).to.equal('calificado');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"calificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18b. PATCH …/etapa a propuesta → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Etapa propuesta', () => pm.expect(plan.etapa).to.equal('propuesta'));",
+                  "pm.test('Historial con 3 registros, el último calificado → propuesta', () => {",
+                  "  pm.expect(plan.historial).to.have.length(3);",
+                  "  const ultimo = plan.historial[plan.historial.length - 1];",
+                  "  pm.expect(ultimo.etapa_anterior).to.equal('calificado');",
+                  "  pm.expect(ultimo.etapa_nueva).to.equal('propuesta');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18c. PATCH …/etapa a negociacion → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Etapa negociacion', () => pm.expect(plan.etapa).to.equal('negociacion'));",
+                  "pm.test('Historial con 4 registros, el último propuesta → negociacion', () => {",
+                  "  pm.expect(plan.historial).to.have.length(4);",
+                  "  const ultimo = plan.historial[plan.historial.length - 1];",
+                  "  pm.expect(ultimo.etapa_anterior).to.equal('propuesta');",
+                  "  pm.expect(ultimo.etapa_nueva).to.equal('negociacion');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"negociacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18d. PATCH …/etapa a negociacion otra vez → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ errores: { etapa: 'No se puede pasar de negociacion a negociacion.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"negociacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "19. DELETE …/productos/{{idLineaNueva}} → 204 sin cuerpo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 204', () => pm.response.to.have.status(204));",
+                  "pm.test('Sin cuerpo', () => pm.expect(pm.response.text()).to.equal(''));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/productos/{{idLineaNueva}}"
+          }
+        },
+        {
+          "name": "20. PATCH …/etapa a ganada sin tratamientos → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ errores: { etapa: 'Agregue al menos un tratamiento antes de aceptar el plan.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"ganada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "21. PATCH …/etapa a perdida con motivo en blanco → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('422 con motivo_perdida', () => pm.expect(Object.keys(pm.response.json().errores).sort()).to.eql(['motivo_perdida']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"perdida\",\n  \"motivo_perdida\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "22. PATCH …/etapa a perdida con motivo → 200 cerrado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Cerrado en perdida con probabilidad 0', () => {",
+                  "  pm.expect(plan.etapa).to.equal('perdida');",
+                  "  pm.expect(plan.probabilidad).to.equal(0);",
+                  "});",
+                  "pm.test('Motivo recortado', () => pm.expect(plan.motivo_perdida).to.equal('Prefiere otra clínica'));",
+                  "pm.test('fecha_cierre en ISO UTC', () => pm.expect(plan.fecha_cierre).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$/));",
+                  "pm.test('Historial con 5 registros', () => pm.expect(plan.historial).to.have.length(5));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanNuevo}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"perdida\",\n  \"motivo_perdida\": \"  Prefiere otra clínica  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "23. PATCH /oportunidades/{{idPlanFamiliar}} (perdida) → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'El plan ya está cerrado y no se puede modificar.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanFamiliar}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"No debe cambiar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "23b. PATCH /oportunidades/{{idPlanFamiliar}}/etapa a prospecto → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'El plan ya está cerrado y no se puede modificar.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanFamiliar}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"prospecto\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "23c. POST /oportunidades/{{idPlanFamiliar}}/productos → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'El plan ya está cerrado y no se puede modificar.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanFamiliar}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanBasico}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "24. PATCH /oportunidades/{{idPlanAjeno}} (de Diego) → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanAjeno}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"titulo\": \"No debe cambiar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "24b. PATCH /oportunidades/{{idPlanAjeno}}/etapa → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanAjeno}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"perdida\",\n  \"motivo_perdida\": \"No debe cambiar\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "24c. POST /oportunidades/{{idPlanAjeno}}/productos → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanAjeno}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idPlanBasico}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "event": [
@@ -2030,7 +3710,10 @@
       "script": {
         "type": "text/javascript",
         "exec": [
-          "pm.test('La respuesta es JSON', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));"
+          "// Un 204 no tiene cuerpo ni Content-Type (DELETE de una línea del plan).",
+          "if (pm.response.code !== 204) {",
+          "  pm.test('La respuesta es JSON', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+          "}"
         ]
       }
     }
@@ -2134,6 +3817,42 @@
     },
     {
       "key": "idActividadNueva",
+      "value": ""
+    },
+    {
+      "key": "idPlanAjeno",
+      "value": ""
+    },
+    {
+      "key": "idPlanAvanzado",
+      "value": ""
+    },
+    {
+      "key": "idPlanBasico",
+      "value": ""
+    },
+    {
+      "key": "idRenovacion",
+      "value": ""
+    },
+    {
+      "key": "idPlanFamiliar",
+      "value": ""
+    },
+    {
+      "key": "idLineaRenovacion",
+      "value": ""
+    },
+    {
+      "key": "idLicenciaAnterior",
+      "value": ""
+    },
+    {
+      "key": "idPlanNuevo",
+      "value": ""
+    },
+    {
+      "key": "idLineaNueva",
       "value": ""
     }
   ]
