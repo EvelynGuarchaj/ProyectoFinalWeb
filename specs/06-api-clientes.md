@@ -1,6 +1,6 @@
 # 06 · API de clientes y cartera
 
-**Estado:** aprobado
+**Estado:** Implementado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: tabla `clientes` con sus índices únicos y CHECK, y la semilla de verificación) y SPEC 02 (`02-api-base-login`: `db.js`, `util/errores.js` y, de sus pasos 4 y 5, `util/validar.js` y `middleware/auth.js`)
 **Fecha:** 2026-11-08
 **Dueña:** B

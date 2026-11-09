@@ -1,13 +1,13 @@
 # 21 · Detalle del plan en la SPA
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 10-spa-base (A: `estado.js`, `api.js`, `util.js`, `textos.js` y `app.js` con delegación, indicador de carga y aviso), 11-api-oportunidades (B: detalle, título, etapa y tratamientos del plan; `GET /productos`), 13-api-regla-propia (B: 409 de la cita de evaluación), 19-spa-embudo (B: enlaces `#/plan/<id>` y mismo estilo de vista)
 **Fecha:** 2026-11-08
 **Dueña:** B
 **Rama:** `spec-21-spa-plan`
 **Objetivo:** reemplazar la vista provisional `#/plan/:id` por el detalle del plan, donde el asesor edita el título, agrega, cambia y quita tratamientos, mueve el plan de etapa y ve su historial.
 
-**Situación de implementación (2026-11-08):** los seis pasos están implementados. Se corrigieron en `plan.js` las respuestas tardías y la visualización del detalle de otro ID antes de cargar. CA1 confirmado por B; CA2 parcial (faltan planes ajenos); CA14 comprobado automáticamente. CA11 comprobado en simulación de la vista, pendiente en navegador. Los demás criterios siguen pendientes de verificación integrada, según `docs/verificacion.md` §2.4. Las 45 pruebas unitarias de la API pasan; no equivalen a aceptación de la SPA. La spec no se considera cerrada ni se marca Implementado con estas verificaciones pendientes.
+**Situación de implementación (2026-11-09):** los seis pasos están implementados y el estado de este spec es Implementado. Se corrigieron en `plan.js` las respuestas tardías y la visualización del detalle de otro ID antes de cargar. Firefox confirmó CA1 y el recorrido de éxito CA4–CA9 (crear, editar título, agregar tratamiento, cambiar cantidad y aceptar por las etapas); CA2 sigue parcial (falta un plan ajeno), CA6 no recorrió quitar, CA11 está simulada y CA14 comprobado automáticamente. Los criterios restantes de navegador siguen según `docs/verificacion.md` §2.4.
 
 La integrante solicitó expresamente actualizar la documentación de B en esta rama, sin cambiar de rama; esto exceptúa para esta revisión la separación documental prevista en el alcance.
 

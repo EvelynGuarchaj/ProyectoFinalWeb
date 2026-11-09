@@ -1,6 +1,6 @@
 # 19 · Tablero de planes en la SPA
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 10-spa-base (A: `estado.js`, `api.js`, `util.js`, `textos.js` y `app.js` con delegación, indicador de carga y aviso), 11-api-oportunidades (B: `GET /oportunidades` y `POST /oportunidades`), 06-api-clientes (B: `GET /clientes`)
 **Fecha:** 2026-11-08
 **Dueña:** B

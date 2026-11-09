@@ -4,6 +4,10 @@
 
 _Base cargada con `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo que se indique otra cosa._
 
+Prueba automatizada del panel (2026-11-09): `php artisan test --compact` en `laravel/` terminó con **304 aprobadas, 0 fallidas, 1,456 aserciones**. Cubre los flujos de panel mediante pruebas HTTP/Feature; no equivale a un recorrido visual en navegador.
+
+Recorrido visual integrado (Firefox headless, 2026-11-09): panel — Alicia inicia sesión, abre Pacientes, Tratamientos y el reporte de octubre de 2026; SPA — Diego inicia sesión, crea un plan temporal para un paciente propio, agrega Blanqueamiento, cambia cantidad a 2, edita el título, avanza por Evaluado, Presupuesto enviado y En negociación hasta Aceptado, y lo encuentra en el tablero de cerrados. En 375 px el embudo no desborda horizontalmente. Se borró el plan temporal al finalizar y se verificó que no queda ninguno con el prefijo de prueba. Este recorrido verifica el flujo principal de ambas interfaces; los casos específicos de errores, XSS, API apagada, regla propia y detalle responsivo se mantienen en sus filas individuales.
+
 ## 2. Matriz de criterios de aceptación
 
 ### 2.1 Panel (A)
@@ -92,6 +96,14 @@ _Base cargada con `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo 
 
 | Criterio | Evidencia | Resultado |
 |---|---|---|
+| A1–A2 · Inicio de sesión y token | `api/src/rutas/auth.js`, `middleware/auth.js`; carpeta Sesión de la colección Postman valida 200 de Valeria, token HS256, 401 idénticos, 403 de no asesores y revocación de usuario desactivado | Implementado; colección preparada, corrida en Postman pendiente |
+| A3 · Cartera, normalización y privacidad | `rutas/clientes.js`, `util/nit.js`, `util/telefono.js`; pruebas `nit.test.js`, `telefono.test.js`; colección cubre lista, alta, disponibles, tomar, ver, editar, 404 ajeno, 409 repetidos y 422 | Implementado; pruebas unitarias y chequeo simultáneo ejecutado |
+| A5 · Actividades | `rutas/actividades.js`, `util/fechas.js`; `fechas.test.js`; colección cubre alta, filtros, fechas inválidas y completar/reabrir | Implementado; colección preparada, corrida en Postman pendiente |
+| A4 · Planes, tratamientos e historial | `rutas/oportunidades.js`; `etapas.test.js`; colección Postman cubre endpoints de planes, transiciones inválidas, repetidos, historial, precio guardado y errores de acceso | Implementado; colección preparada, corrida en Postman pendiente |
+| Regla propia · cita de evaluación | `util/reglaPropia.js`, pruebas `reglaPropia.test.js`; carpeta “Regla propia” prueba 409, cita pendiente/completada y reapertura | Implementado; colección requiere SectorSeeder y corrida en Postman pendiente |
+| A6 · Resumen | `rutas/reportes.js`, `mes.test.js`; carpeta Resumen valida Valeria, Diego, Carlos, mes vacío/inválido y mes actual | Implementado; colección preparada, corrida en Postman pendiente |
+| S3–S5 · SQL parametrizado, sesión revalidada y recursos ajenos en 404 | Revisión de rutas y middleware; Postman incluye casos de token faltante, usuario revocado, ids inválidos y planes/clientes ajenos | Implementado por revisión; colección preparada |
+| S8 · máximo de cartera con peticiones concurrentes | `cd api && npm run simultaneas`, semilla de verificación, Carlos con 9/10: dos altas simultáneas → estados `201, 409`, conteo 10; el script elimina el registro temporal | Cumple; ejecutado en esta revisión |
 
 ### 2.3 SPA · login, cartera, actividades, resumen y base (A)
 
@@ -132,12 +144,13 @@ _Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `loca
 | Spec 21 · CA1: plan aceptado | La integrante B confirmó en el navegador que Renovación de planes muestra todos los datos esperados | Cumple; confirmado por la integrante, no repetido por el agente |
 | Spec 21 · CA2: no encontrado | La integrante B confirmó `#/plan/999999` y `#/plan/abc`, mensaje y enlace correctos, sin aviso rojo | Parcial: falta probar un plan de otro asesor |
 | Spec 21 · CA3: plan rechazado | Implementado en `frontend/js/vistas/plan.js`; no se recibió confirmación de la prueba propuesta | Pendiente en navegador |
-| Spec 21 · CA4: título | Formulario y manejo 200/422/409 implementados | Pendiente contra la API real |
-| Spec 21 · CA5: agregar | Formulario, números JSON y filtro de tratamientos implementados | Pendiente contra la API real |
-| Spec 21 · CA6: cantidad y quitar | PATCH y DELETE seguido de GET implementados | Pendiente contra la API real |
+| Spec 19 · Crear plan y abrir su detalle | Firefox: Diego creó el plan desde `#/embudo` y la SPA abrió `#/plan/:id`; el plan apareció en el tablero al cerrarlo | Cumple en recorrido integrado |
+| Spec 21 · CA4: título | Firefox: editó el título; el detalle reflejó el `PATCH` y el nuevo título se mantuvo tras cerrar | Cumple en recorrido integrado; 422/409 pendientes |
+| Spec 21 · CA5: agregar | Firefox: agregó Blanqueamiento y mostró el precio guardado | Cumple en recorrido integrado; validaciones pendientes |
+| Spec 21 · CA6: cantidad y quitar | Firefox: cambió la cantidad a 2 y el subtotal/total se actualizaron; `DELETE` de línea no se recorrió | Parcial: cantidad cumple; quitar pendiente |
 | Spec 21 · CA7: repetido | Manejo de 409 conservando valores implementado | Pendiente con dos pestañas |
-| Spec 21 · CA8: botones de etapa | Selección de siguiente etapa y aceptación solo en negociación implementada | Pendiente en navegador |
-| Spec 21 · CA9: recorrido completo | Formularios de etapa e historial implementados | Pendiente contra la API real; no se crearon ni cerraron planes durante esta revisión |
+| Spec 21 · CA8: botones de etapa | Firefox: avanzó por las etapas abiertas y aceptó el plan desde En negociación | Cumple en recorrido integrado |
+| Spec 21 · CA9: recorrido completo | Firefox: creó plan, agregó tratamiento, cambió cantidad y título, avanzó por todas las etapas, aceptó y comprobó el plan en el tablero | Cumple para el recorrido de éxito; rechazo y regla propia se anotan por separado |
 | Spec 21 · CA10: rechazo | Abrir/cancelar, motivo y manejo de errores implementados | Pendiente contra la API real |
 | Spec 21 · CA11: cambiar de plan | Simulación Node con módulos reales y `fetch` simulado: oculta el detalle de otro ID antes de cargar; descarta carga, mutación y 422 tardíos; DELETE tardío no pide otro plan | Cumple en simulación de la vista; pendiente en navegador con la base completa |
 | Spec 21 · CA12: regla propia | `npm test` verifica la regla con consultas simuladas, incluido 409; la vista muestra errores de la API | Pendiente el flujo de Andrea y las etiquetas en navegador; las pruebas unitarias no lo sustituyen |
@@ -145,10 +158,11 @@ _Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `loca
 | Spec 21 · CA14: delegación | `git grep -n -E 'addEventListener\|onclick' -- frontend/js`: únicamente click, submit y hashchange en `app.js` | Cumple por revisión automática; ninguno en `plan.js` |
 | Spec 21 · CA15: carga y doble clic | Indicador y desactivación dependen de la base de A; guarda de `quitar` presente | Pendiente con Slow 3G y doble clic en navegador |
 | Spec 21 · CA16: API apagada | Manejo de errores y conservación de valores implementados | Pendiente detener/encender API y reintentar en navegador |
-| Spec 21 · CA17: 375 px | Rejilla adaptable y clases para textos largos presentes | Pendiente comprobación visual; no se simuló diseño |
+| Spec 19 · 375 px | Firefox a 375 px: el embudo no tiene desplazamiento horizontal | Cumple en recorrido integrado |
+| Spec 21 · CA17: 375 px | Rejilla adaptable y clases para textos largos presentes | Pendiente comprobación visual del detalle |
 | Spec 21 · CA18: textos y almacenamiento | Revisión del vocabulario de `plan.js`; sin acceso directo a `localStorage` | Pendiente comprobar la pantalla y almacenamiento reales |
 
-Revisión de cierre (2026-11-08): `npm test` en `api/`: **45 aprobadas, 0 fallidas**, sin conexión a MySQL. Sintaxis de `plan.js` con `node --input-type=module --check` y `git diff --check`: correctas. Las simulaciones usan respuestas en memoria, sin peticiones reales ni escrituras de datos. No se ejecutaron migraciones, semillas, pruebas del panel ni pruebas simultáneas.
+Revisión de cierre (2026-11-09): `npm test` en `api/` terminó sin fallos; `npm run simultaneas` pasó contra MySQL, con limpieza del registro temporal; `php artisan test --compact` terminó con **304 aprobadas, 0 fallidas y 1,456 aserciones**. El recorrido Firefox del panel y la SPA está descrito al inicio de esta sección. La colección Postman es JSON válido con **161 peticiones** (GET, POST, PATCH y DELETE), pero no se ejecutó desde Postman en esta revisión. Los escenarios de error y los criterios SPA que aún dicen “pendiente” no se declaran cubiertos por el recorrido feliz.
 
 Se corrigió en `plan.js` la recepción de respuestas de una carga o formulario anterior y se oculta el detalle cuando su ID no corresponde a la ruta. `app.js` sigue redibujando antes de llamar a `cargar()`; no se modificó por pertenecer a A. CA11 necesita confirmación integrada, especialmente al volver al mismo ID. La documentación se prepara en esta rama por petición expresa de B; su traslado a `docs/verificacion` queda a cargo de la integrante, sin cambiar de rama automáticamente.
 
@@ -174,7 +188,7 @@ Se corrigió en `plan.js` la recepción de respuestas de una carga o formulario 
 
 ## 4. Peticiones simultáneas (S8)
 
-_Salida de `npm run simultaneas` en api/._
+`CORREO_CARLOS=carlos@crm.test CLAVE_SEMILLA=<clave de verificación> npm run simultaneas` desde `api/`: **OK**. Con Carlos en 9/10, las dos altas concurrentes respondieron `201` y `409`; la cartera quedó en 10/10. El script borró por ID el único paciente temporal creado. No se alteraron los nueve registros de la semilla.
 
 ## 5. Cifras de control obtenidas
 
@@ -207,4 +221,24 @@ _Panel: `ReporteTest` (spec 14) con `VerificacionSeeder`. La columna API la llen
 - **Cómo lo detectamos:** en revisión, al implementar el Paso 2 con `/spec-impl` y antes de escribir el código. Al comparar la sección 2.4 con CA15 y con la semilla, salió que Iván es `vendedor` y está desactivado a la vez.
 - **Corrección:** `LoginRequest` comprueba primero `activo` y después el rol, y la prueba `LoginPanelTest::test_ca15_una_cuenta_desactivada_no_entra` lo verifica con Iván. Se actualizaron la sección 2.4 del spec 03 y su tabla de decisiones (sección 5) · commit `d8cad35`
 
+### Caso 2 · Datos propuestos para el escenario de la regla propia
+- **Requisito:** L1 / regla propia (spec 17).
+- **Qué aportó el agente:** propuso los datos de Marco Ajanel y el plan de implante en negociación sin cita, escenario que no se puede alcanzar pasando por la API porque la regla lo detiene antes.
+- **Riesgo:** nombres, NIT y teléfono generados podían no respetar el dígito verificador o las reglas de formato del panel y la API.
+- **Cómo se comprobó:** la integrante validó el NIT y el teléfono con las utilidades `Nit` y `Telefono` compartidas por las dos implementaciones.
+- **Resultado:** se incorporó Marco a la semilla como fixture histórico; el spec 17 deja documentado el motivo y el test de la semilla valida los casos de datos.
+
 ### 6.2 Casos de B
+
+### Caso 1 · El cierre de concurrencia necesitaba configuración explícita
+- **Requisito:** S8 / spec 23.
+- **Qué hizo el agente:** preparó `pruebas/simultaneas.js` usando `CORREO_CARLOS` y `CLAVE_SEMILLA` para no leer ni depender de credenciales privadas del `.env`.
+- **Qué salió mal:** la primera ejecución falló porque esas variables no estaban definidas en el entorno local. El chequeo no podía comenzar y el README todavía no explicaba cómo configurarlas.
+- **Cómo se detectó:** al ejecutar `npm run simultaneas`, antes de hacer peticiones o escribir en la base.
+- **Corrección:** se añadieron las variables a `api/.env.example` y los pasos al README; con Carlos y la semilla de verificación, la prueba pasó con una respuesta `201`, una `409` y cartera 10/10. El paciente temporal se eliminó por su ID.
+
+### Caso 2 · “Implementado” no significa “recorrido visual verificado”
+- **Requisito:** F3 / specs 19 y 21.
+- **Qué riesgo identificó el agente:** cambiar el estado solicitado podía confundirse con cerrar también los criterios pendientes del navegador.
+- **Por qué era incorrecto:** docs/verificacion.md registra CA2 parcial en el detalle y varias comprobaciones de navegador aún pendientes; cambiar el estado solicitado no produce evidencia de esas sesiones.
+- **Corrección:** se respetó el estado pedido por la integrante y se mantuvieron explícitas las comprobaciones pendientes en la matriz; la nota del spec 21 explica el alcance del estado.

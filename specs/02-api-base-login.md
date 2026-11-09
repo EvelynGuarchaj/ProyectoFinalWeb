@@ -1,6 +1,6 @@
 # 02 · Base de la API e inicio de sesión
 
-**Estado:** aprobado
+**Estado:** Implementado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: tabla `users` con `rol`, `supervisor_id`, `activo` y la semilla de verificación)
 **Fecha:** 2026-11-08
 **Dueña:** B

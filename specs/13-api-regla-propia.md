@@ -1,6 +1,6 @@
 # 13 · API de la regla propia
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: columna `productos.requiere_evaluacion` y tabla `actividades`), SPEC 08 (`08-api-actividades`: `POST /clientes/:id/actividades` y `PATCH /actividades/:id`, que usa la carpeta de Postman) y SPEC 11 (`11-api-oportunidades`: el candado, los dos comentarios que marcan dónde va la regla y la colección con la carpeta "Planes"). La carpeta de Postman necesita además los datos de la semilla del sector, que define el spec 17 (`17-semilla-sector`, de A). **Ese spec todavía no existe**: la sección 2.3 lista lo que esta carpeta espera de él.
 **Fecha:** 2026-11-08
 **Dueña:** B

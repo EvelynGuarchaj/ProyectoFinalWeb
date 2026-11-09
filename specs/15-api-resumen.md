@@ -1,6 +1,6 @@
 # 15 · API del resumen del mes
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: tablas `clientes`, `oportunidades` y `oportunidad_productos`, y la semilla de verificación), SPEC 02 (`02-api-base-login`: `db.js` con `decimalNumbers: true` y `timezone: 'Z'`, token y errores) y SPEC 06 (`06-api-clientes`: la constante `MAXIMO_CARTERA` de `rutas/clientes.js`). La carpeta de Postman sigue el formato de las carpetas de los specs 06, 08, 11 y 13.
 **Fecha:** 2026-11-08
 **Dueña:** B

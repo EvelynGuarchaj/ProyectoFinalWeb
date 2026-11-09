@@ -1,6 +1,6 @@
 # 11 · API de oportunidades y productos
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: tablas `productos`, `oportunidades`, `oportunidad_productos` e `historial_etapas` con sus CHECK e índices únicos, y la semilla de verificación), SPEC 02 (`02-api-base-login`: `db.js` con `consulta()` y `transaccion()`, `util/errores.js`, `util/validar.js` y `middleware/auth.js`) y SPEC 06 (`06-api-clientes`: `util/formato.js`, el script `test` y la colección de Postman)
 **Fecha:** 2026-11-08
 **Dueña:** B
