@@ -2,7 +2,7 @@
 // Usa GET /actividades?estado=, GET /clientes, POST /clientes/:id/actividades y PATCH /actividades/:id.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar, fechaGT } from '../util.js';
+import { escapar, fechaGT, errorCampo, claseError } from '../util.js';
 import { TIPOS } from '../textos.js';
 
 // Datos de la vista con valores por omisión (spec 20, §2.1).
@@ -82,6 +82,57 @@ function lista(datos) {
   return `<ul class="list-group">${datos.lista.map((a) => fila(a, datos.pestana)).join('')}</ul>`;
 }
 
+// Tarjeta "Nueva actividad". Sin pacientes en la cartera, un mensaje en lugar del formulario (D6).
+function formulario(datos, form) {
+  if (datos.clientes.length === 0) {
+    return `<p class="mb-0">No tiene pacientes en su cartera. Tome uno en
+      <a href="#/cartera">Pacientes</a> para registrar actividades.</p>`;
+  }
+
+  const valores = form.valores || {};
+  const errores = form.errores || {};
+  const tipoElegido = valores.tipo || 'llamada';
+
+  const pacientes = datos.clientes.map((c) => {
+    const elegido = String(c.id) === String(valores.cliente_id) ? ' selected' : '';
+    return `<option value="${escapar(c.id)}"${elegido}>${escapar(c.nombre)}</option>`;
+  }).join('');
+
+  const tipos = Object.entries(TIPOS).map(([valor, texto]) => {
+    const elegido = valor === tipoElegido ? ' selected' : '';
+    return `<option value="${escapar(valor)}"${elegido}>${escapar(texto)}</option>`;
+  }).join('');
+
+  return `<form data-form="nuevaActividad">
+      <div class="mb-3">
+        <label for="actividad-cliente" class="form-label">Paciente</label>
+        <select id="actividad-cliente" name="cliente_id" class="form-select${claseError(errores, 'cliente_id')}" required>
+          <option value="">Elija un paciente</option>${pacientes}
+        </select>
+        ${errorCampo(errores, 'cliente_id')}
+      </div>
+      <div class="mb-3">
+        <label for="actividad-tipo" class="form-label">Tipo</label>
+        <select id="actividad-tipo" name="tipo" class="form-select${claseError(errores, 'tipo')}">${tipos}</select>
+        ${errorCampo(errores, 'tipo')}
+      </div>
+      <div class="mb-3">
+        <label for="actividad-descripcion" class="form-label">Descripción</label>
+        <textarea id="actividad-descripcion" name="descripcion" rows="3"
+                  class="form-control${claseError(errores, 'descripcion')}">${escapar(valores.descripcion)}</textarea>
+        ${errorCampo(errores, 'descripcion')}
+      </div>
+      <div class="mb-3">
+        <label for="actividad-vence" class="form-label">Fecha y hora (opcional)</label>
+        <input type="datetime-local" id="actividad-vence" name="vence_en" aria-describedby="actividad-vence-ayuda"
+               class="form-control${claseError(errores, 'vence_en')}" value="${escapar(valores.vence_en)}">
+        ${errorCampo(errores, 'vence_en')}
+        <div id="actividad-vence-ayuda" class="form-text">Hora de Guatemala. Déjela vacía si no tiene fecha.</div>
+      </div>
+      <button type="submit" class="btn btn-primary">Registrar actividad</button>
+    </form>`;
+}
+
 // ---------- Vista ----------
 
 export default {
@@ -95,6 +146,12 @@ export default {
       pedir('GET', '/clientes')
     ]);
     guardarDatos({ lista, clientes });
+
+    // Lo escrito se conserva al volver a la vista (o tras "Reintentar"); los errores viejos no.
+    const form = estado.formularios.nuevaActividad;
+    if (form) {
+      cambiar({ formularios: { ...estado.formularios, nuevaActividad: { valores: form.valores, errores: {} } } });
+    }
   },
 
   render(estado) {
@@ -104,6 +161,14 @@ export default {
         <h1 class="h4 mb-3">Mis actividades</h1>
         ${pestanas(datos.pestana)}
         ${lista(datos)}
+      </section>
+      <section class="col-12 col-lg-5">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <h2 class="h5 card-title mb-3">Nueva actividad</h2>
+            ${formulario(datos, estado.formularios.nuevaActividad || { valores: {}, errores: {} })}
+          </div>
+        </div>
       </section>
     </div>`;
   },
