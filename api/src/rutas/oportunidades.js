@@ -5,16 +5,27 @@
 // en el texto SQL (S3).
 import { Router } from 'express';
 import { consulta, transaccion } from '../db.js';
-import { invalido, noEncontrado, peticionMala } from '../util/errores.js';
+import { conflicto, invalido, noEncontrado, peticionMala } from '../util/errores.js';
 import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
-import { ETAPAS } from '../util/etapas.js';
+import { ABIERTAS, CERRADAS, ETAPAS, transicionPermitida } from '../util/etapas.js';
 import * as formato from '../util/formato.js';
 
 const MENSAJES = {
   filtroEtapa: 'El filtro etapa no es válido.',
   clienteId: 'Elija un paciente de su cartera.',
   titulo: 'Escriba el título (máximo 150 caracteres).',
+  cerrado: 'El plan ya está cerrado y no se puede modificar.',
+  sinTratamientos: 'Agregue al menos un tratamiento antes de aceptar el plan.',
+  motivoPerdida: 'Escriba el motivo (de 1 a 255 caracteres).',
+  cambioSimultaneo: 'El plan cambió al mismo tiempo en otra petición. Recárguelo.',
 };
+
+// Marcador del mensaje de transición cuando `etapa` falta o no es texto.
+const SIN_ETAPA = '(sin etapa)';
+
+// Índices únicos según la convención de Laravel (spec 01). Si `SHOW INDEX` muestra otros
+// nombres, se cambian aquí.
+const INDICE_HISTORIAL = 'historial_etapas_oportunidad_id_etapa_nueva_unique';
 
 // `cliente_id`, `producto_id` y `cantidad` solo se aceptan como enteros JSON:
 // "5", 5.5, null o la clave ausente no lo son.
@@ -110,6 +121,44 @@ const SQL_HISTORIAL_INSERTAR = `
   INSERT INTO historial_etapas (oportunidad_id, usuario_id, etapa_anterior, etapa_nueva, created_at)
   VALUES (?, ?, ?, ?, UTC_TIMESTAMP())`;
 
+// Candado de toda modificación: primer paso dentro de la transacción. Pone en fila las
+// peticiones al mismo plan; la segunda lee el estado que dejó la primera (S8).
+const SQL_CANDADO = 'SELECT id, etapa FROM oportunidades WHERE id = ? AND vendedor_id = ? FOR UPDATE';
+
+const SQL_CAMBIAR_TITULO = 'UPDATE oportunidades SET titulo = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?';
+
+const SQL_CONTAR_LINEAS = 'SELECT COUNT(*) AS lineas FROM oportunidad_productos WHERE oportunidad_id = ?';
+
+// Cambio de etapa: dos textos fijos, avanzar (a una abierta) y cerrar (ganada o perdida).
+const SQL_AVANZAR = 'UPDATE oportunidades SET etapa = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?';
+
+const SQL_CERRAR = `
+  UPDATE oportunidades
+     SET etapa = ?, motivo_perdida = ?, fecha_cierre = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP()
+   WHERE id = ?`;
+
+/**
+ * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa }`,
+ * o `undefined` si no existe o es ajeno.
+ */
+async function bloquearPlan(cx, id, vendedorId) {
+  const [filas] = await cx.execute(SQL_CANDADO, [id, vendedorId]);
+  return filas[0];
+}
+
+// Un plan cerrado no cambia (sección 3.10): 409.
+function exigirAbierto(plan) {
+  if (CERRADAS.includes(plan.etapa)) throw conflicto(MENSAJES.cerrado);
+}
+
+// Candado completo de los planes: 404 si no hay fila, 409 si está cerrado.
+async function bloquearPlanAbierto(cx, id, vendedorId) {
+  const plan = await bloquearPlan(cx, id, vendedorId);
+  if (!plan) throw noEncontrado();
+  exigirAbierto(plan);
+  return plan;
+}
+
 /**
  * Revisa el cuerpo del POST. Junta todos los errores en un solo 422.
  * Solo lee `cliente_id` y `titulo`; `etapa`, `vendedor_id` y cualquier otro campo se ignoran.
@@ -179,4 +228,77 @@ rutasOportunidades.post('/', async (req, res) => {
   });
 
   res.status(201).json(detalle);
+});
+
+// PATCH /api/oportunidades/:id  { "titulo": "…" }
+// Solo cambia el título; cualquier otro campo del cuerpo se ignora.
+rutasOportunidades.patch('/:id', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  const detalle = await transaccion(async (cx) => {
+    await bloquearPlanAbierto(cx, id, vendedorId);
+
+    const titulo = texto(cuerpo.titulo, 1, 150);
+    if (titulo === null) throw invalido({ titulo: MENSAJES.titulo });
+
+    await cx.execute(SQL_CAMBIAR_TITULO, [titulo, id]);
+    return leerDetalle(ejecutarCon(cx), id, vendedorId);
+  });
+
+  res.json(detalle);
+});
+
+// PATCH /api/oportunidades/:id/etapa  { "etapa": "…", "motivo_perdida": "…" }
+// Orden de la sección 4.4: 404, 409, transición, ganada sin tratamientos, motivo.
+rutasOportunidades.patch('/:id/etapa', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  let detalle;
+  try {
+    detalle = await transaccion(async (cx) => {
+      const { etapa: actual } = await bloquearPlanAbierto(cx, id, vendedorId);
+      const nueva = cuerpo.etapa;
+
+      // Saltos, retrocesos, la misma etapa o un valor que no es una etapa: 422.
+      if (!transicionPermitida(actual, nueva)) {
+        const mostrada = typeof nueva === 'string' ? nueva : SIN_ETAPA;
+        throw invalido({ etapa: `No se puede pasar de ${actual} a ${mostrada}.` });
+      }
+
+      if (nueva === 'ganada') {
+        const [[{ lineas }]] = await cx.execute(SQL_CONTAR_LINEAS, [id]);
+        if (lineas === 0) throw invalido({ etapa: MENSAJES.sinTratamientos });
+      }
+
+      // En las demás etapas, `motivo_perdida` se ignora.
+      let motivo = null;
+      if (nueva === 'perdida') {
+        motivo = texto(cuerpo.motivo_perdida, 1, 255);
+        if (motivo === null) throw invalido({ motivo_perdida: MENSAJES.motivoPerdida });
+      }
+
+      // Regla propia (spec 13): si la etapa nueva es propuesta, negociacion o ganada, revisar la sección 2.3 de la especificación → 409.
+
+      if (ABIERTAS.includes(nueva)) {
+        await cx.execute(SQL_AVANZAR, [nueva, id]);
+      } else {
+        await cx.execute(SQL_CERRAR, [nueva, motivo, id]);
+      }
+      await cx.execute(SQL_HISTORIAL_INSERTAR, [id, vendedorId, actual, nueva]);
+
+      return leerDetalle(ejecutarCon(cx), id, vendedorId);
+    });
+  } catch (err) {
+    // Respaldo del FOR UPDATE: transaccion() ya revirtió, no queda ni el cambio ni el historial.
+    if (err?.code === 'ER_DUP_ENTRY' && String(err.sqlMessage ?? '').includes(INDICE_HISTORIAL)) {
+      throw conflicto(MENSAJES.cambioSimultaneo);
+    }
+    throw err;
+  }
+
+  res.json(detalle);
 });
