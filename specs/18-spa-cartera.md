@@ -59,7 +59,7 @@ estado.formularios.buscar = { valores: { q } };
 
 | Momento | Peticiones |
 |---|---|
-| `cargar()` | `GET /clientes`, `GET /clientes/disponibles` y `GET /reportes/resumen`, en paralelo. Pone `q: ''` |
+| `cargar()` | `GET /clientes`, `GET /clientes/disponibles` y `GET /reportes/resumen`, en paralelo. Pone `q: ''` y borra `formularios.buscar`, para que el campo del buscador y la lista coincidan al volver a la vista |
 | Buscar | `GET /clientes?q=<encodeURIComponent(q recortado)>`; si `q` queda vacío, `GET /clientes` |
 | Limpiar | `GET /clientes` y `q: ''` |
 | Alta con 201 | `GET /clientes` (búsqueda limpia) y `GET /reportes/resumen` |

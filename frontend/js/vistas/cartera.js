@@ -2,7 +2,7 @@
 // Spec 18. La búsqueda, el contador y las validaciones los hace el servidor; aquí solo se muestran.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar } from '../util.js';
+import { escapar, errorCampo, claseError, mostrarError } from '../util.js';
 
 // ---------- Peticiones ----------
 
@@ -33,6 +33,13 @@ function guardarCartera(parcial) {
   cambiar({ datos: { ...estado.datos, cartera: { ...actual, ...parcial } } });
 }
 
+// Quita formularios del estado sin tocar los de otras vistas.
+function sinFormularios(...nombres) {
+  const resto = { ...estado.formularios };
+  for (const nombre of nombres) delete resto[nombre];
+  return resto;
+}
+
 // ---------- Partes de la pantalla ----------
 
 function contadorHtml(resumen) {
@@ -53,6 +60,42 @@ function buscadorHtml(estado, cartera) {
       ${limpiar}
     </div>
   </form>`;
+}
+
+function campoHtml(id, etiqueta, tipo, valores, errores, extra = '', ayuda = '') {
+  const ayudaHtml = ayuda ? `<div id="alta-${id}-ayuda" class="form-text">${ayuda}</div>` : '';
+  const describe = ayuda ? ` aria-describedby="alta-${id}-ayuda"` : '';
+  return `<div class="mb-3">
+    <label for="alta-${id}" class="form-label">${etiqueta}</label>
+    <input type="${tipo}" id="alta-${id}" name="${id}" class="form-control${claseError(errores, id)}"
+           value="${escapar(valores[id])}" ${extra}${describe}>
+    ${errorCampo(errores, id)}
+    ${ayudaHtml}
+  </div>`;
+}
+
+function altaHtml(estado) {
+  const form = estado.formularios.alta || {};
+  const valores = form.valores || {};
+  const errores = form.errores || {};
+  // El 409 (NIT o teléfono repetido, cartera llena) va encima del formulario.
+  const error = form.error
+    ? `<div class="alert alert-danger texto-largo" role="alert">${escapar(form.error)}</div>`
+    : '';
+  // novalidate: los mensajes de error los da el servidor (L7), no el navegador.
+  return `<div class="card mb-3">
+    <div class="card-body">
+      <h2 class="h5 card-title">Agregar paciente</h2>
+      ${error}
+      <form data-form="alta" novalidate>
+        ${campoHtml('nombre', 'Nombre', 'text', valores, errores, 'autocomplete="off"')}
+        ${campoHtml('nit', 'NIT', 'text', valores, errores, 'autocomplete="off"', 'Con su dígito verificador, o CF.')}
+        ${campoHtml('telefono', 'Teléfono', 'tel', valores, errores, 'inputmode="tel" autocomplete="off"')}
+        ${campoHtml('correo', 'Correo (opcional)', 'email', valores, errores, 'autocomplete="off"')}
+        <button type="submit" class="btn btn-primary w-100">Agregar paciente</button>
+      </form>
+    </div>
+  </div>`;
 }
 
 function miosHtml(cartera) {
@@ -90,6 +133,9 @@ export default {
 
   async cargar(params) {
     // Las tres en paralelo; el contador tiene su propio manejo de errores y no tumba a las listas.
+    // Al entrar, la búsqueda empieza vacía: se borra también el texto del buscador para que
+    // el campo y la lista coincidan (el spec 10 conserva estado.formularios al navegar).
+    cambiar({ formularios: sinFormularios('buscar') });
     const [mios, disponibles, resumen] = await Promise.all([pedirMios(''), pedirDisponibles(), pedirContador()]);
     guardarCartera({ mios, disponibles, resumen, q: '' });
   },
@@ -106,6 +152,7 @@ export default {
         ${miosHtml(cartera)}
       </section>
       <section class="col-12 col-lg-5">
+        ${altaHtml(estado)}
         <div class="card">
           <div class="card-body">
             <h2 class="h5 card-title">Pacientes disponibles</h2>
@@ -118,8 +165,7 @@ export default {
 
   acciones: {
     async limpiarBusqueda() {
-      const { buscar, ...resto } = estado.formularios;
-      cambiar({ formularios: resto });
+      cambiar({ formularios: sinFormularios('buscar') });
       const mios = await pedirMios('');
       guardarCartera({ mios, q: '' });
     }
@@ -133,6 +179,39 @@ export default {
       cambiar({ formularios: { ...estado.formularios, buscar: { valores: { q } } } });
       const mios = await pedirMios(q);
       guardarCartera({ mios, q });
+    },
+
+    async alta(datos) {
+      const valores = {
+        nombre: datos.nombre || '',
+        nit: datos.nit || '',
+        telefono: datos.telefono || '',
+        correo: datos.correo || ''
+      };
+      // Se guarda lo escrito ANTES de pedir: cada cambio de estado vuelve a dibujar.
+      cambiar({ formularios: { ...estado.formularios, alta: { valores, errores: {}, error: null } } });
+
+      let paciente;
+      try {
+        // Correo vacío viaja como "": la API lo guarda como null (spec 06).
+        paciente = await pedir('POST', '/clientes', valores);
+      } catch (e) {
+        if (e.status === 422) {
+          cambiar({ formularios: { ...estado.formularios, alta: { valores, errores: e.errores, error: null } } });
+        } else if (e.status === 409) {
+          cambiar({ formularios: { ...estado.formularios, alta: { valores, errores: {}, error: e.message } } });
+        } else {
+          mostrarError(e); // API apagada, 500 o sesión terminada; lo escrito sigue guardado
+        }
+        return;
+      }
+
+      // 201: formulario vacío, búsqueda limpia, lista y contador de nuevo.
+      cambiar({ formularios: sinFormularios('alta', 'buscar') });
+      const [mios, resumen] = await Promise.all([pedirMios(''), pedirContador()]);
+      guardarCartera({ mios, resumen, q: '' });
+      // Sin escapar aquí: el layout ya pasa aviso.texto por escapar().
+      cambiar({ aviso: { tipo: 'success', texto: `Se agregó a ${paciente.nombre} a su cartera.` } });
     }
   }
 };
