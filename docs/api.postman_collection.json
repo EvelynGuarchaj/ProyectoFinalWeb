@@ -1322,6 +1322,706 @@
           }
         }
       ]
+    },
+    {
+      "name": "Actividades",
+      "description": "A5, S3 y S5 en las rutas de actividades (spec 08). Cambia datos (crea y completa una actividad): ejecútela completa y en orden, justo después de `php artisan migrate:fresh --seeder=VerificacionSeeder`. Si se ejecuta dos veces sin recargar la semilla, falla. Necesita las variables correo_diego, correo_valeria y clave.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const internasActividades = ['password', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+              "pm.test('Sin llaves internas (password, vendedor_id, user_id, supervisor_id, usuario_id)', () => {",
+              "  const texto = pm.response.text();",
+              "  internasActividades.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "1. Login de Diego → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_diego está llena', () => pm.expect(pm.collectionVariables.get('correo_diego'), 'Llene correo_diego').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_diego', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_diego}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "1b. GET /actividades de Diego → guarda idActividadAjena",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('Diego tiene al menos una actividad', () => pm.expect(lista).to.be.an('array').that.is.not.empty);",
+                  "pm.collectionVariables.set('idActividadAjena', lista[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/actividades"
+          }
+        },
+        {
+          "name": "1c. GET /clientes de Diego → guarda idClienteAjeno (Farmacia Los Altos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const farmacia = pm.response.json().find((c) => c.nombre === 'Farmacia Los Altos');",
+                  "pm.test('Diego tiene a Farmacia Los Altos', () => pm.expect(farmacia).to.be.an('object'));",
+                  "pm.collectionVariables.set('idClienteAjeno', farmacia.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "2. Login de Valeria → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_valeria está llena', () => pm.expect(pm.collectionVariables.get('correo_valeria'), 'Llene correo_valeria').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_valeria', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2b. GET /clientes de Valeria → guarda idClienteValeria (Ferretería Xela)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const ferreteria = pm.response.json().find((c) => c.nombre === 'Ferretería Xela');",
+                  "pm.test('Valeria tiene a Ferretería Xela', () => pm.expect(ferreteria).to.be.an('object'));",
+                  "pm.collectionVariables.set('idClienteValeria', ferreteria.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "3. GET /actividades?estado=pendiente → vencida false y true",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "const revisarForma = (a) => {",
+                  "  pm.expect(Object.keys(a).sort()).to.eql(['cliente', 'completada', 'descripcion', 'id', 'tipo', 'vence_en', 'vencida']);",
+                  "  pm.expect(Object.keys(a.cliente).sort()).to.eql(['id', 'nombre']);",
+                  "  pm.expect(a.completada).to.be.a('boolean');",
+                  "  pm.expect(a.vencida).to.be.a('boolean');",
+                  "};",
+                  "pm.test('Cada actividad tiene exactamente las 7 claves y booleanos', () => lista.forEach(revisarForma));",
+                  "pm.test('Todas están pendientes', () => lista.forEach((a) => pm.expect(a.completada).to.equal(false)));",
+                  "const capacitacion = lista.find((a) => a.descripcion === 'Enviar propuesta de capacitación');",
+                  "const soporte = lista.find((a) => a.descripcion === 'Presentar opciones de soporte');",
+                  "pm.test('\"Enviar propuesta de capacitación\" no está vencida', () => pm.expect(capacitacion, 'No aparece').to.be.an('object').that.has.property('vencida', false));",
+                  "pm.test('\"Presentar opciones de soporte\" está vencida', () => pm.expect(soporte, 'No aparece').to.be.an('object').that.has.property('vencida', true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades?estado=pendiente"
+          }
+        },
+        {
+          "name": "4. GET /actividades?estado=hoy → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje del filtro', () => pm.expect(pm.response.json()).to.eql({ error: 'El filtro estado debe ser pendiente o completada.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades?estado=hoy"
+          }
+        },
+        {
+          "name": "4b. GET /actividades?estado= (vacío) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje del filtro', () => pm.expect(pm.response.json()).to.eql({ error: 'El filtro estado debe ser pendiente o completada.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades?estado="
+          }
+        },
+        {
+          "name": "5. GET /actividades sin filtro → con fecha ascendente, sin fecha al final",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const fechas = pm.response.json().map((a) => a.vence_en);",
+                  "const primeraSinFecha = fechas.indexOf(null);",
+                  "const conFecha = primeraSinFecha === -1 ? fechas : fechas.slice(0, primeraSinFecha);",
+                  "pm.test('Las sin fecha van al final', () => {",
+                  "  if (primeraSinFecha !== -1) fechas.slice(primeraSinFecha).forEach((f) => pm.expect(f).to.equal(null));",
+                  "});",
+                  "pm.test('Las con fecha van en orden ascendente', () => {",
+                  "  for (let i = 1; i < conFecha.length; i++) pm.expect(new Date(conFecha[i - 1]) <= new Date(conFecha[i])).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades"
+          }
+        },
+        {
+          "name": "6. POST /clientes/{{idClienteValeria}}/actividades sin zona → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en vence_en', () => pm.expect(pm.response.json().errores).to.eql({ vence_en: 'Escriba la fecha en ISO 8601 con zona horaria, por ejemplo 2026-12-01T10:00:00-06:00.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idClienteValeria}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"llamada\",\n  \"descripcion\": \"Llamar para confirmar\",\n  \"vence_en\": \"2026-12-01T10:00\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "7. POST con tipo, descripción y fecha inválidos → un solo 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "const errores = pm.response.json().errores;",
+                  "pm.test('Errores en tipo, descripcion y vence_en', () => pm.expect(Object.keys(errores).sort()).to.eql(['descripcion', 'tipo', 'vence_en']));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idClienteValeria}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"visita\",\n  \"descripcion\": \"\",\n  \"vence_en\": \"2026-02-30T10:00:00Z\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "8. POST válido con -06:00 y vendedor_id → 201 en UTC (vendedor_id se ignora)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const actividad = pm.response.json();",
+                  "const revisarForma = (a) => {",
+                  "  pm.expect(Object.keys(a).sort()).to.eql(['cliente', 'completada', 'descripcion', 'id', 'tipo', 'vence_en', 'vencida']);",
+                  "  pm.expect(Object.keys(a.cliente).sort()).to.eql(['id', 'nombre']);",
+                  "  pm.expect(a.completada).to.be.a('boolean');",
+                  "  pm.expect(a.vencida).to.be.a('boolean');",
+                  "};",
+                  "pm.test('Forma Actividad: exactamente las 7 claves', () => revisarForma(actividad));",
+                  "pm.test('Fecha guardada en UTC', () => pm.expect(actividad.vence_en).to.equal('2026-12-01T16:00:00.000Z'));",
+                  "pm.test('Nace pendiente', () => pm.expect(actividad.completada).to.equal(false));",
+                  "pm.test('Es de Ferretería Xela', () => pm.expect(actividad.cliente.nombre).to.equal('Ferretería Xela'));",
+                  "pm.collectionVariables.set('idActividadNueva', actividad.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idClienteValeria}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"reunion\",\n  \"descripcion\": \"Cita de evaluación\",\n  \"vence_en\": \"2026-12-01T10:00:00-06:00\",\n  \"vendedor_id\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "9. POST a un paciente de Diego → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensaje 404', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idClienteAjeno}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"tarea\",\n  \"descripcion\": \"Actividad de Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "9b. POST /clientes/abc/actividades → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensaje 404', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/abc/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"tarea\",\n  \"descripcion\": \"Actividad de Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10. PATCH /actividades/{{idActividadNueva}} con \"si\" → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en completada', () => pm.expect(pm.response.json()).to.eql({ errores: { completada: 'Indique true o false.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idActividadNueva}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": \"si\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10b. PATCH /actividades/{{idActividadNueva}} con {} → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Error en completada', () => pm.expect(pm.response.json()).to.eql({ errores: { completada: 'Indique true o false.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idActividadNueva}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10c. PATCH /actividades/{{idActividadNueva}} con true → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const actividad = pm.response.json();",
+                  "pm.test('Completada y no vencida', () => pm.expect(actividad).to.include({ completada: true, vencida: false }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idActividadNueva}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11. GET /actividades?estado=completada → incluye la nueva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const id = Number(pm.collectionVariables.get('idActividadNueva'));",
+                  "pm.test('Incluye idActividadNueva', () => pm.expect(pm.response.json().map((a) => a.id)).to.include(id));",
+                  "pm.test('Ninguna completada está vencida', () => pm.response.json().forEach((a) => pm.expect(a.vencida).to.equal(false)));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades?estado=completada"
+          }
+        },
+        {
+          "name": "11b. GET /actividades?estado=pendiente → no incluye la nueva",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const id = Number(pm.collectionVariables.get('idActividadNueva'));",
+                  "pm.test('No incluye idActividadNueva', () => pm.expect(pm.response.json().map((a) => a.id)).to.not.include(id));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades?estado=pendiente"
+          }
+        },
+        {
+          "name": "12. PATCH /actividades/{{idActividadAjena}} (de Diego) → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Mensaje 404', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idActividadAjena}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   ],
   "event": [
@@ -1418,6 +2118,22 @@
     },
     {
       "key": "idDisponible3",
+      "value": ""
+    },
+    {
+      "key": "idActividadAjena",
+      "value": ""
+    },
+    {
+      "key": "idClienteAjeno",
+      "value": ""
+    },
+    {
+      "key": "idClienteValeria",
+      "value": ""
+    },
+    {
+      "key": "idActividadNueva",
       "value": ""
     }
   ]
