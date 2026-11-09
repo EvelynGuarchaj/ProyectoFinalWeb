@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node --watch --env-file=.env src/servidor.js",
     "start": "node --env-file=.env src/servidor.js",
-    "test": "node --test pruebas/",
+    "test": "node --test \"pruebas/*.test.js\"",
     "simultaneas": "node --env-file=.env pruebas/simultaneas.js"
   },
   "dependencies": {
