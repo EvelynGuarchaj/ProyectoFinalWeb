@@ -40,6 +40,21 @@ function contadorHtml(resumen) {
   return `<p class="mb-3"><span class="badge text-bg-primary fs-6">${escapar(resumen.clientes)} de ${escapar(resumen.maximo)}</span> pacientes</p>`;
 }
 
+function buscadorHtml(estado, cartera) {
+  const valores = (estado.formularios.buscar && estado.formularios.buscar.valores) || {};
+  const limpiar = cartera.q
+    ? '<button type="button" class="btn btn-outline-secondary" data-accion="limpiarBusqueda">Limpiar</button>'
+    : '';
+  return `<form data-form="buscar" role="search" class="mb-3">
+    <label for="buscar-q" class="form-label">Buscar por nombre o NIT</label>
+    <div class="input-group">
+      <input type="search" id="buscar-q" name="q" class="form-control" value="${escapar(valores.q)}">
+      <button type="submit" class="btn btn-outline-primary">Buscar</button>
+      ${limpiar}
+    </div>
+  </form>`;
+}
+
 function miosHtml(cartera) {
   if (cartera.mios.length === 0) {
     const texto = cartera.q ? 'No se encontraron pacientes.' : 'Aún no tiene pacientes en su cartera.';
@@ -87,6 +102,7 @@ export default {
       <section class="col-12 col-lg-7">
         <h1 class="h4 mb-1">Mis pacientes</h1>
         ${contadorHtml(cartera.resumen)}
+        ${buscadorHtml(estado, cartera)}
         ${miosHtml(cartera)}
       </section>
       <section class="col-12 col-lg-5">
@@ -100,7 +116,23 @@ export default {
     </div>`;
   },
 
-  acciones: {},
+  acciones: {
+    async limpiarBusqueda() {
+      const { buscar, ...resto } = estado.formularios;
+      cambiar({ formularios: resto });
+      const mios = await pedirMios('');
+      guardarCartera({ mios, q: '' });
+    }
+  },
 
-  formularios: {}
+  formularios: {
+    // La búsqueda la hace el servidor: GET /clientes?q=… (sin q si queda vacío).
+    async buscar(datos) {
+      const q = (datos.q || '').trim();
+      // Se guarda lo escrito ANTES de pedir: cada cambio de estado vuelve a dibujar.
+      cambiar({ formularios: { ...estado.formularios, buscar: { valores: { q } } } });
+      const mios = await pedirMios(q);
+      guardarCartera({ mios, q });
+    }
+  }
 };
