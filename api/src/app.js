@@ -10,6 +10,7 @@ import { rutasYo } from './rutas/yo.js';
 import { rutasClientes } from './rutas/clientes.js';
 import { rutasActividades, rutasActividadesDeCliente } from './rutas/actividades.js';
 import { rutasProductos } from './rutas/productos.js';
+import { rutasOportunidades } from './rutas/oportunidades.js';
 
 export const app = express();
 
@@ -39,6 +40,7 @@ api.use('/clientes', rutasClientes);
 api.use('/clientes', rutasActividadesDeCliente);
 api.use('/actividades', rutasActividades);
 api.use('/productos', rutasProductos);
+api.use('/oportunidades', rutasOportunidades);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
