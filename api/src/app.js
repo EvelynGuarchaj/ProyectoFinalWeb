@@ -4,6 +4,14 @@ import express from 'express';
 import cors from 'cors';
 import { config } from './config.js';
 import { manejarErrores } from './middleware/errores.js';
+import { exigirToken } from './middleware/auth.js';
+import { rutasAuth } from './rutas/auth.js';
+import { rutasYo } from './rutas/yo.js';
+import { rutasClientes } from './rutas/clientes.js';
+import { rutasActividades, rutasActividadesDeCliente } from './rutas/actividades.js';
+import { rutasProductos } from './rutas/productos.js';
+import { rutasOportunidades } from './rutas/oportunidades.js';
+import { rutasReportes } from './rutas/reportes.js';
 
 export const app = express();
 
@@ -21,8 +29,20 @@ app.use(
 // Lee los cuerpos JSON. Si el JSON está roto, el error llega a manejarErrores (400).
 app.use(express.json());
 
-// Rutas bajo /api. Se agregan en los pasos 4 y 5 (login, middleware de autenticación y /yo).
+// Rutas bajo /api.
 const api = express.Router();
+// Sin token: solo el inicio de sesión.
+api.use('/auth', rutasAuth);
+// Todo lo que sigue exige token. Una ruta inexistente bajo /api sin token responde 401.
+api.use(exigirToken);
+api.use('/yo', rutasYo);
+api.use('/clientes', rutasClientes);
+// POST /clientes/:id/actividades: rutasClientes no la tiene, así que Express sigue a este router.
+api.use('/clientes', rutasActividadesDeCliente);
+api.use('/actividades', rutasActividades);
+api.use('/productos', rutasProductos);
+api.use('/oportunidades', rutasOportunidades);
+api.use('/reportes', rutasReportes);
 app.use('/api', api);
 
 // Ninguna ruta respondió.

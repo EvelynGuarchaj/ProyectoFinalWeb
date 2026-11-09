@@ -111,6 +111,12 @@ _Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `loca
 | F2 · "Tomar": 200 pasa a Mis pacientes y sube el contador; 409 muestra el mensaje y recarga disponibles | `vistas/cartera.js:222` (`tomar`), `:119` (un `form data-form="tomar"` por fila); simulación CA6, CA7 y CA8 | Cumple en simulación; pendiente con dos asesores (Valeria y Diego) y con Carlos en el navegador |
 | F2 · Si el resumen falla, "Contador no disponible" sin aviso y las listas cargan | `vistas/cartera.js:20` (`pedirContador`: solo relanza sesión terminada y status 0); simulación CA9 | Cumple en simulación; pendiente en el navegador |
 | F2 · Paciente `<img src=x onerror=alert(1)>` se ve como texto | Todo dato de la API en `vistas/cartera.js` pasa por `escapar()`; el aviso de éxito lo escapa `app.js:110`; simulación CA10 | Cumple en simulación; pendiente en el navegador |
+| F5 · Valeria, octubre de 2026: Planes aceptados 2, Total vendido Q9,250.00, Pronóstico Q2,512.88, Cartera 3 de 10 (noviembre: 1 · Q3,600.00) | `vistas/resumen.js:85` (`formularios.mes`: `GET /reportes/resumen?mes=…`), `:74-77` (`quetzales()` y `escapar()`, sin cálculos); simulación CA1 del spec 22 | Cumple en simulación; pendiente en el navegador con el spec 15 en `main` |
+| F5 · Al abrir, `GET /reportes/resumen` sin `mes` y el selector muestra el mes que devolvió la API | `vistas/resumen.js:34` (`cargar`, sin `mesActualGT()`); simulación CA2 | Cumple en simulación; pendiente la pestaña Red en el navegador |
+| F5 · Mes sin ventas (enero de 2020): 0 y Q0.00; pronóstico y cartera sin cambio; nota "de sus planes abiertos, sin importar el mes" | `vistas/resumen.js:76`; simulación CA3 y CA4 | Cumple en simulación; pendiente en el navegador |
+| F5 · Mes inválido (`?mes=` vacío o `2026-13`): aviso rojo "Escriba el mes con el formato AAAA-MM." y las tarjetas conservan las últimas cifras; un 200 quita el aviso | `vistas/resumen.js:98` (`mostrarError(e)` sin tocar `datos.resumen`), `:94` (`aviso: null`); simulación CA5 | Cumple en simulación; pendiente en el navegador |
+| F5 · Otra zona horaria: mismas cifras y subtítulo | `vistas/resumen.js:9` (subtítulo con `Intl` en `timeZone: 'UTC'`); simulación repetida con `TZ=Asia/Tokyo` y `TZ=Pacific/Kiritimati` sin diferencias | Cumple en simulación; pendiente en el navegador (Sensores → Ubicación) |
+| F5 · API apagada en `#/resumen`: aviso con "Reintentar" y "No se pudo cargar el resumen." | `vistas/resumen.js:34` (relanza el error a `app.js`), `:62`; simulación CA9 | Cumple en simulación; pendiente en el navegador |
 | F6 · Solo hay escuchadores delegados | `git grep -n "addEventListener\|onclick" frontend/js` → solo `app.js:151` (`click`), `app.js:164` (`submit`) y `app.js:183` (`hashchange` de `window`) | Cumple |
 | F6 · Indicador de carga y botones de envío desactivados con `cargando > 0` | `api.js` (suma al empezar, resta en `finally:67`), `app.js:96` (spinner), `app.js:123` (`disabled`). A mano: Slow 3G en Chrome | Cumple |
 | F6 · API apagada: "No se pudo conectar con el servidor. Verifique que la API esté encendida." con "Reintentar" | `api.js:38` (`ErrorApi` con status 0), `app.js:103` (botón), `app.js:145` (`reintentar`); simulación CA10 | Cumple en simulación; pendiente en el navegador y con el origen `localhost:5500` |
@@ -123,6 +129,28 @@ _Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `loca
 
 | Criterio | Evidencia | Resultado |
 |---|---|---|
+| Spec 21 · CA1: plan aceptado | La integrante B confirmó en el navegador que Renovación de planes muestra todos los datos esperados | Cumple; confirmado por la integrante, no repetido por el agente |
+| Spec 21 · CA2: no encontrado | La integrante B confirmó `#/plan/999999` y `#/plan/abc`, mensaje y enlace correctos, sin aviso rojo | Parcial: falta probar un plan de otro asesor |
+| Spec 21 · CA3: plan rechazado | Implementado en `frontend/js/vistas/plan.js`; no se recibió confirmación de la prueba propuesta | Pendiente en navegador |
+| Spec 21 · CA4: título | Formulario y manejo 200/422/409 implementados | Pendiente contra la API real |
+| Spec 21 · CA5: agregar | Formulario, números JSON y filtro de tratamientos implementados | Pendiente contra la API real |
+| Spec 21 · CA6: cantidad y quitar | PATCH y DELETE seguido de GET implementados | Pendiente contra la API real |
+| Spec 21 · CA7: repetido | Manejo de 409 conservando valores implementado | Pendiente con dos pestañas |
+| Spec 21 · CA8: botones de etapa | Selección de siguiente etapa y aceptación solo en negociación implementada | Pendiente en navegador |
+| Spec 21 · CA9: recorrido completo | Formularios de etapa e historial implementados | Pendiente contra la API real; no se crearon ni cerraron planes durante esta revisión |
+| Spec 21 · CA10: rechazo | Abrir/cancelar, motivo y manejo de errores implementados | Pendiente contra la API real |
+| Spec 21 · CA11: cambiar de plan | Simulación Node con módulos reales y `fetch` simulado: oculta el detalle de otro ID antes de cargar; descarta carga, mutación y 422 tardíos; DELETE tardío no pide otro plan | Cumple en simulación de la vista; pendiente en navegador con la base completa |
+| Spec 21 · CA12: regla propia | `npm test` verifica la regla con consultas simuladas, incluido 409; la vista muestra errores de la API | Pendiente el flujo de Andrea y las etiquetas en navegador; las pruebas unitarias no lo sustituyen |
+| Spec 21 · CA13: XSS | Revisión de interpolaciones: datos escapados o formateados por utilidades | Pendiente el caso completo en navegador |
+| Spec 21 · CA14: delegación | `git grep -n -E 'addEventListener\|onclick' -- frontend/js`: únicamente click, submit y hashchange en `app.js` | Cumple por revisión automática; ninguno en `plan.js` |
+| Spec 21 · CA15: carga y doble clic | Indicador y desactivación dependen de la base de A; guarda de `quitar` presente | Pendiente con Slow 3G y doble clic en navegador |
+| Spec 21 · CA16: API apagada | Manejo de errores y conservación de valores implementados | Pendiente detener/encender API y reintentar en navegador |
+| Spec 21 · CA17: 375 px | Rejilla adaptable y clases para textos largos presentes | Pendiente comprobación visual; no se simuló diseño |
+| Spec 21 · CA18: textos y almacenamiento | Revisión del vocabulario de `plan.js`; sin acceso directo a `localStorage` | Pendiente comprobar la pantalla y almacenamiento reales |
+
+Revisión de cierre (2026-11-08): `npm test` en `api/`: **45 aprobadas, 0 fallidas**, sin conexión a MySQL. Sintaxis de `plan.js` con `node --input-type=module --check` y `git diff --check`: correctas. Las simulaciones usan respuestas en memoria, sin peticiones reales ni escrituras de datos. No se ejecutaron migraciones, semillas, pruebas del panel ni pruebas simultáneas.
+
+Se corrigió en `plan.js` la recepción de respuestas de una carga o formulario anterior y se oculta el detalle cuando su ID no corresponde a la ruta. `app.js` sigue redibujando antes de llamar a `cargar()`; no se modificó por pertenecer a A. CA11 necesita confirmación integrada, especialmente al volver al mismo ID. La documentación se prepara en esta rama por petición expresa de B; su traslado a `docs/verificacion` queda a cargo de la integrante, sin cambiar de rama automáticamente.
 
 ## 3. Seguridad (S1–S8)
 
