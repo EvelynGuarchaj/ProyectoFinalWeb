@@ -102,7 +102,44 @@ class SectorSeeder extends Seeder
      */
     private function clientes(array $usuarios, CarbonImmutable $ahora): array
     {
-        return [];
+        // [correo del asesor o null, nombre, NIT compacto o null (CF), teléfono, correo]
+        // NIT y teléfonos validados con App\Support\Nit y App\Support\Telefono;
+        // ninguno se repite con VerificacionSeeder.
+        $lista = [
+            ['andrea@dental.test', 'Sofía Ramírez', null, '48101101', 'sofia.ramirez@correo.test'],
+            ['andrea@dental.test', 'Jorge Cifuentes', '10293841', '48101102', null],
+            ['andrea@dental.test', 'Colegio Bilingüe Los Altos', '56473826', '77681103', 'administracion@colegiolosaltos.test'],
+            ['andrea@dental.test', 'Mariela Chun', null, '48101104', null],
+            ['andrea@dental.test', 'Rodrigo Tzoc', '91827361', '48101105', null],
+            ['andrea@dental.test', 'Gabriela Barrios', null, '48101106', null],
+
+            ['kevin@dental.test', 'Esteban Quemé', '33445567', '51201201', null],
+            ['kevin@dental.test', 'Paola Fernández', null, '51201202', null],
+            ['kevin@dental.test', 'Textiles del Altiplano', '70123454', '77681204', null],
+            ['kevin@dental.test', 'Héctor Sapón', '24681350', '51201205', null],
+            ['kevin@dental.test', 'Claudia Ixcot', null, '51201206', null],
+            // Paciente para R-P6: plan en negociación con implante y sin citas (decisión D2).
+            ['kevin@dental.test', 'Marco Ajanel', '48151629', '51201207', null],
+
+            [null, 'Fernando Pú', '81357923', '51301301', null],
+            [null, 'Daniela Monterroso', null, '51301302', null],
+            [null, 'Andrés Velásquez', '60708093', '51301303', null],
+        ];
+
+        $ids = [];
+        foreach ($lista as [$vendedor, $nombre, $nit, $telefono, $correo]) {
+            $ids[$nombre] = DB::table('clientes')->insertGetId([
+                'vendedor_id' => $vendedor === null ? null : $usuarios[$vendedor],
+                'nombre' => $nombre,
+                'nit' => $nit,
+                'telefono' => $telefono,
+                'correo' => $correo,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+        }
+
+        return $ids;
     }
 
     /**
