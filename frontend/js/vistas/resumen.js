@@ -2,7 +2,7 @@
 // Spec 22. Las cifras las calcula la API; aquí solo se les da formato.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar, quetzales } from '../util.js';
+import { escapar, quetzales, mostrarError } from '../util.js';
 
 // 'Cifras de octubre de 2026'. Se usa UTC en los dos lados para que el texto
 // no dependa de la zona horaria de la computadora.
@@ -80,6 +80,23 @@ export default {
 
   acciones: {},
 
-  // formularios.mes llega en el Paso 2.
-  formularios: {}
+  formularios: {
+    // GET /reportes/resumen?mes=AAAA-MM. El mes no se valida aquí: el árbitro es la API (400).
+    async mes(datos) {
+      const mes = datos.mes || '';
+      // Se guarda antes de pedir, para que el redibujado no borre lo elegido.
+      cambiar({ formularios: { ...estado.formularios, mes: { valores: { mes } } } });
+      try {
+        const r = await pedir('GET', `/reportes/resumen?mes=${encodeURIComponent(mes)}`);
+        cambiar({
+          datos: { ...estado.datos, resumen: r },
+          formularios: { ...estado.formularios, mes: { valores: { mes: r.mes } } },
+          aviso: null
+        });
+      } catch (e) {
+        // 400: aviso con el mensaje de la API; las tarjetas conservan las últimas cifras válidas.
+        mostrarError(e);
+      }
+    }
+  }
 };
