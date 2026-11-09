@@ -17,6 +17,20 @@ function guardarDatos(parcial) {
   cambiar({ datos: { ...estado.datos, actividades: { ...datosVista(), ...parcial } } });
 }
 
+// Vuelve a pedir la lista de la pestaña activa y, si se pide, también los pacientes del select.
+async function recargar(conClientes) {
+  const { pestana } = datosVista();
+  if (!conClientes) {
+    guardarDatos({ lista: await pedir('GET', `/actividades?estado=${pestana}`) });
+    return;
+  }
+  const [lista, clientes] = await Promise.all([
+    pedir('GET', `/actividades?estado=${pestana}`),
+    pedir('GET', '/clientes')
+  ]);
+  guardarDatos({ lista, clientes });
+}
+
 // ---------- Dibujo ----------
 
 function pestanas(activa) {
@@ -101,6 +115,22 @@ export default {
       if (!PESTANAS.includes(valor)) return;
       const lista = await pedir('GET', `/actividades?estado=${valor}`);
       guardarDatos({ pestana: valor, lista });
+    },
+
+    // PATCH /actividades/:id. Con 200 sale de Pendientes; con 404 (paciente reasignado) se pone la pantalla al día.
+    // El aviso va después de la recarga para que su cambiar() no lo pise.
+    async completar(elemento) {
+      const id = elemento.dataset.id;
+      try {
+        await pedir('PATCH', `/actividades/${encodeURIComponent(id)}`, { completada: true });
+      } catch (e) {
+        if (e.status !== 404) throw e;
+        await recargar(true);
+        cambiar({ aviso: { tipo: 'danger', texto: e.message } });
+        return;
+      }
+      await recargar(false);
+      cambiar({ aviso: { tipo: 'success', texto: 'Actividad completada.' } });
     }
   },
 
