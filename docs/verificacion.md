@@ -129,6 +129,28 @@ _Spec 10. "Simulación" = flujo completo en Node con DOM, `location.hash`, `loca
 
 | Criterio | Evidencia | Resultado |
 |---|---|---|
+| Spec 21 · CA1: plan aceptado | La integrante B confirmó en el navegador que Renovación de planes muestra todos los datos esperados | Cumple; confirmado por la integrante, no repetido por el agente |
+| Spec 21 · CA2: no encontrado | La integrante B confirmó `#/plan/999999` y `#/plan/abc`, mensaje y enlace correctos, sin aviso rojo | Parcial: falta probar un plan de otro asesor |
+| Spec 21 · CA3: plan rechazado | Implementado en `frontend/js/vistas/plan.js`; no se recibió confirmación de la prueba propuesta | Pendiente en navegador |
+| Spec 21 · CA4: título | Formulario y manejo 200/422/409 implementados | Pendiente contra la API real |
+| Spec 21 · CA5: agregar | Formulario, números JSON y filtro de tratamientos implementados | Pendiente contra la API real |
+| Spec 21 · CA6: cantidad y quitar | PATCH y DELETE seguido de GET implementados | Pendiente contra la API real |
+| Spec 21 · CA7: repetido | Manejo de 409 conservando valores implementado | Pendiente con dos pestañas |
+| Spec 21 · CA8: botones de etapa | Selección de siguiente etapa y aceptación solo en negociación implementada | Pendiente en navegador |
+| Spec 21 · CA9: recorrido completo | Formularios de etapa e historial implementados | Pendiente contra la API real; no se crearon ni cerraron planes durante esta revisión |
+| Spec 21 · CA10: rechazo | Abrir/cancelar, motivo y manejo de errores implementados | Pendiente contra la API real |
+| Spec 21 · CA11: cambiar de plan | Simulación Node con módulos reales y `fetch` simulado: oculta el detalle de otro ID antes de cargar; descarta carga, mutación y 422 tardíos; DELETE tardío no pide otro plan | Cumple en simulación de la vista; pendiente en navegador con la base completa |
+| Spec 21 · CA12: regla propia | `npm test` verifica la regla con consultas simuladas, incluido 409; la vista muestra errores de la API | Pendiente el flujo de Andrea y las etiquetas en navegador; las pruebas unitarias no lo sustituyen |
+| Spec 21 · CA13: XSS | Revisión de interpolaciones: datos escapados o formateados por utilidades | Pendiente el caso completo en navegador |
+| Spec 21 · CA14: delegación | `git grep -n -E 'addEventListener\|onclick' -- frontend/js`: únicamente click, submit y hashchange en `app.js` | Cumple por revisión automática; ninguno en `plan.js` |
+| Spec 21 · CA15: carga y doble clic | Indicador y desactivación dependen de la base de A; guarda de `quitar` presente | Pendiente con Slow 3G y doble clic en navegador |
+| Spec 21 · CA16: API apagada | Manejo de errores y conservación de valores implementados | Pendiente detener/encender API y reintentar en navegador |
+| Spec 21 · CA17: 375 px | Rejilla adaptable y clases para textos largos presentes | Pendiente comprobación visual; no se simuló diseño |
+| Spec 21 · CA18: textos y almacenamiento | Revisión del vocabulario de `plan.js`; sin acceso directo a `localStorage` | Pendiente comprobar la pantalla y almacenamiento reales |
+
+Revisión de cierre (2026-11-08): `npm test` en `api/`: **45 aprobadas, 0 fallidas**, sin conexión a MySQL. Sintaxis de `plan.js` con `node --input-type=module --check` y `git diff --check`: correctas. Las simulaciones usan respuestas en memoria, sin peticiones reales ni escrituras de datos. No se ejecutaron migraciones, semillas, pruebas del panel ni pruebas simultáneas.
+
+Se corrigió en `plan.js` la recepción de respuestas de una carga o formulario anterior y se oculta el detalle cuando su ID no corresponde a la ruta. `app.js` sigue redibujando antes de llamar a `cargar()`; no se modificó por pertenecer a A. CA11 necesita confirmación integrada, especialmente al volver al mismo ID. La documentación se prepara en esta rama por petición expresa de B; su traslado a `docs/verificacion` queda a cargo de la integrante, sin cambiar de rama automáticamente.
 
 ## 3. Seguridad (S1–S8)
 
