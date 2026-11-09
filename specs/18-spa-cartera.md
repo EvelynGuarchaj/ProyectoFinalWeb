@@ -1,6 +1,6 @@
 # 18 · Cartera en la SPA
 
-**Estado:** Borrador
+**Estado:** Aprobado 
 **Depende de:** 10-spa-base (`estado.js`, `api.js`, `util.js`, `app.js` con delegación, indicador de carga y aviso), 06-api-clientes (B: `GET /clientes?q=`, `POST /clientes`, `GET /clientes/disponibles` y `POST /clientes/:id/tomar`; hoy en la rama `origin/spec-06-api-clientes`, todavía no en `main`), 15-api-resumen (B: `GET /reportes/resumen`; su spec todavía no existe en `specs/`)
 **Fecha:** 2026-11-08
 **Dueña:** A
