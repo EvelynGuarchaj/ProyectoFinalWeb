@@ -5,6 +5,7 @@ namespace Database\Seeders;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 
 /**
  * Semilla del sector dental (spec 17-semilla-sector).
@@ -37,13 +38,62 @@ class SectorSeeder extends Seeder
     /** @return array<string, int> correo => id */
     private function cuentas(CarbonImmutable $ahora): array
     {
-        return [];
+        // Un solo hash para las 3 cuentas, con la contraseña pública que
+        // define VerificacionSeeder (decisión D3: el texto vive en un solo lugar).
+        $hash = Hash::make(VerificacionSeeder::CONTRASENA);
+
+        $fila = fn (string $nombre, string $correo, string $rol, ?int $supervisorId) => [
+            'name' => $nombre,
+            'email' => $correo,
+            'password' => $hash,
+            'rol' => $rol,
+            'supervisor_id' => $supervisorId,
+            'activo' => true,
+            'created_at' => $ahora,
+            'updated_at' => $ahora,
+        ];
+
+        $ids = [];
+
+        // Primero la coordinadora: la FK y chk_users_supervisor exigen que
+        // exista antes que sus asesores.
+        $ids['lucia@dental.test'] = DB::table('users')->insertGetId($fila('Dra. Lucía Méndez', 'lucia@dental.test', 'supervisor', null));
+
+        $ids['andrea@dental.test'] = DB::table('users')->insertGetId($fila('Andrea Gómez', 'andrea@dental.test', 'vendedor', $ids['lucia@dental.test']));
+        $ids['kevin@dental.test'] = DB::table('users')->insertGetId($fila('Kevin Chávez', 'kevin@dental.test', 'vendedor', $ids['lucia@dental.test']));
+
+        return $ids;
     }
 
     /** @return array<string, int> nombre => id */
     private function productos(CarbonImmutable $ahora): array
     {
-        return [];
+        // [nombre, precio (texto, para no pasar por float), requiere evaluación]
+        $catalogo = [
+            ['Limpieza dental', '300.00', false],
+            ['Resina dental', '350.00', false],
+            ['Extracción simple', '250.00', false],
+            ['Extracción de cordal', '900.00', false],
+            ['Blanqueamiento', '1200.00', false],
+            ['Endodoncia', '1500.00', false],
+            ['Corona de porcelana', '2500.00', false],
+            ['Ortodoncia con brackets', '8000.00', true],
+            ['Implante dental', '9000.00', true],
+        ];
+
+        $ids = [];
+        foreach ($catalogo as [$nombre, $precio, $requiereEvaluacion]) {
+            $ids[$nombre] = DB::table('productos')->insertGetId([
+                'nombre' => $nombre,
+                'precio' => $precio,
+                'activo' => true,
+                'requiere_evaluacion' => $requiereEvaluacion,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+        }
+
+        return $ids;
     }
 
     /**
