@@ -137,7 +137,7 @@ const SQL_HISTORIAL_INSERTAR = `
 
 // Candado de toda modificación: primer paso dentro de la transacción. Pone en fila las
 // peticiones al mismo plan; la segunda lee el estado que dejó la primera (S8).
-const SQL_CANDADO = 'SELECT id, etapa FROM oportunidades WHERE id = ? AND vendedor_id = ? FOR UPDATE';
+const SQL_CANDADO = 'SELECT id, etapa, cliente_id FROM oportunidades WHERE id = ? AND vendedor_id = ? FOR UPDATE';
 
 const SQL_CAMBIAR_TITULO = 'UPDATE oportunidades SET titulo = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?';
 
@@ -176,7 +176,7 @@ const SQL_CAMBIAR_CANTIDAD = `
 const SQL_BORRAR_LINEA = 'DELETE FROM oportunidad_productos WHERE id = ? AND oportunidad_id = ?';
 
 /**
- * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa }`,
+ * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa, cliente_id }`,
  * o `undefined` si no existe o es ajeno.
  */
 async function bloquearPlan(cx, id, vendedorId) {
