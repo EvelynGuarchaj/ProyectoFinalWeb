@@ -8,6 +8,7 @@ import { exigirToken } from './middleware/auth.js';
 import { rutasAuth } from './rutas/auth.js';
 import { rutasYo } from './rutas/yo.js';
 import { rutasClientes } from './rutas/clientes.js';
+import { rutasActividades, rutasActividadesDeCliente } from './rutas/actividades.js';
 
 export const app = express();
 
@@ -33,6 +34,9 @@ api.use('/auth', rutasAuth);
 api.use(exigirToken);
 api.use('/yo', rutasYo);
 api.use('/clientes', rutasClientes);
+// POST /clientes/:id/actividades: rutasClientes no la tiene, así que Express sigue a este router.
+api.use('/clientes', rutasActividadesDeCliente);
+api.use('/actividades', rutasActividades);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
