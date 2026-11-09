@@ -4,7 +4,7 @@
 // Lo ajeno responde 404, igual que lo inexistente (S5).
 import { Router } from 'express';
 import { consulta, transaccion } from '../db.js';
-import { conflicto, invalido, noEncontrado } from '../util/errores.js';
+import { conflicto, invalido, noEncontrado, peticionMala } from '../util/errores.js';
 import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
 import * as nit from '../util/nit.js';
 import * as telefono from '../util/telefono.js';
@@ -25,10 +25,22 @@ const MENSAJES = {
   correo: 'Escriba un correo válido.',
   nitRepetido: 'Ya existe un paciente con ese NIT.',
   telefonoRepetido: 'Ya existe un paciente con ese teléfono.',
+  noDisponible: 'Este paciente ya no está disponible.',
+  sinCampos: 'No envió ningún campo para cambiar.',
   carteraLlena: `Su cartera ya tiene ${MAXIMO_CARTERA} pacientes, el máximo permitido.`,
 };
 
-const FORMATO_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// Campos que el asesor puede enviar y la columna de `clientes` que cambia cada uno.
+// Las columnas del UPDATE del PATCH salen solo de esta lista fija, nunca del cuerpo (S3).
+const COLUMNAS_EDITABLES = {
+  nombre: 'nombre',
+  nit: 'nit',
+  telefono: 'telefono',
+  correo: 'correo',
+};
+const CAMPOS = Object.keys(COLUMNAS_EDITABLES);
+
+const FORMATO_CORREO =/^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Cada regla devuelve { ok: true, valor } con lo que se guarda, o { ok: false }.
 const REGLAS = {
@@ -117,12 +129,18 @@ function traducirDuplicado(err) {
 }
 
 /**
- * Dentro de una transacción: bloquea la fila del asesor y revisa que su cartera tenga espacio.
- * El candado en `users` va primero (orden de candados: users → clientes → oportunidades),
- * así dos peticiones del mismo asesor cuentan una después de la otra.
+ * Dentro de una transacción: bloquea la fila del asesor. Va siempre primero
+ * (orden de candados: users → clientes → oportunidades), así dos peticiones del mismo
+ * asesor cuentan su cartera una después de la otra.
  */
-async function bloquearCartera(cx, vendedorId) {
+async function bloquearAsesor(cx, vendedorId) {
   await cx.execute('SELECT id FROM users WHERE id = ? FOR UPDATE', [vendedorId]);
+}
+
+/**
+ * Dentro de la transacción y después de bloquearAsesor: si la cartera ya está llena → 409.
+ */
+async function exigirEspacioEnCartera(cx, vendedorId) {
   const [filas] = await cx.execute('SELECT COUNT(*) AS total FROM clientes WHERE vendedor_id = ?', [
     vendedorId,
   ]);
@@ -175,13 +193,14 @@ rutasClientes.post('/', async (req, res) => {
   const cuerpo = exigirCuerpo(req);
   const vendedorId = req.usuario.id;
 
-  const valores = validarCampos(cuerpo, ['nombre', 'nit', 'telefono', 'correo']);
+  const valores = validarCampos(cuerpo, CAMPOS);
   await revisarRepetidos(valores);
 
   let resultado;
   try {
     resultado = await transaccion(async (cx) => {
-      await bloquearCartera(cx, vendedorId);
+      await bloquearAsesor(cx, vendedorId);
+      await exigirEspacioEnCartera(cx, vendedorId);
       const [r] = await cx.execute(
         `INSERT INTO clientes (vendedor_id, nombre, nit, telefono, correo, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, NOW(), NOW())`,
@@ -197,6 +216,38 @@ rutasClientes.post('/', async (req, res) => {
   res.status(201).json(formato.cliente({ id: resultado.insertId, ...valores }));
 });
 
+// POST /api/clientes/:id/tomar  → el asesor toma un paciente disponible (sin asesor). No lleva cuerpo.
+rutasClientes.post('/:id/tomar', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const vendedorId = req.usuario.id;
+
+  await transaccion(async (cx) => {
+    // 1. Candado del asesor.
+    await bloquearAsesor(cx, vendedorId);
+
+    // 2. Candado del paciente. Va antes del conteo: un id inexistente da 404 aunque la cartera esté llena.
+    const [filas] = await cx.execute('SELECT vendedor_id FROM clientes WHERE id = ? FOR UPDATE', [id]);
+    if (filas.length === 0) throw noEncontrado();
+    // Si ya tiene asesor, aunque sea el mismo, ya no está disponible.
+    if (filas[0].vendedor_id !== null) throw conflicto(MENSAJES.noDisponible);
+
+    // 3. Cartera.
+    await exigirEspacioEnCartera(cx, vendedorId);
+
+    // 4. Asignar. El "AND vendedor_id IS NULL" es un respaldo: con el FOR UPDATE no debería fallar.
+    const [r] = await cx.execute(
+      'UPDATE clientes SET vendedor_id = ?, updated_at = NOW() WHERE id = ? AND vendedor_id IS NULL',
+      [vendedorId, id]
+    );
+    if (r.affectedRows === 0) throw conflicto(MENSAJES.noDisponible);
+  });
+
+  // 5. Después del COMMIT se lee como cualquier paciente de la cartera.
+  const fila = await leerUno(id, vendedorId);
+  if (!fila) throw noEncontrado(); // Solo si el panel lo liberó o reasignó justo en este instante.
+  res.json(formato.cliente(fila));
+});
+
 // GET /api/clientes/disponibles  → pacientes sin asesor, solo id y nombre.
 // Va antes de /:id para que "disponibles" no se tome como un id.
 rutasClientes.get('/disponibles', async (req, res) => {
@@ -210,6 +261,45 @@ rutasClientes.get('/disponibles', async (req, res) => {
 rutasClientes.get('/:id', async (req, res) => {
   const id = idDeRuta(req.params.id);
   const fila = await leerUno(id, req.usuario.id);
+  if (!fila) throw noEncontrado();
+  res.json(formato.cliente(fila));
+});
+
+// PATCH /api/clientes/:id  → cambia solo los campos que vienen en el cuerpo.
+rutasClientes.patch('/:id', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  // Solo cuentan las claves del contrato; las demás (vendedor_id, id…) se ignoran.
+  const presentes = CAMPOS.filter((campo) => Object.hasOwn(cuerpo, campo));
+  if (presentes.length === 0) throw peticionMala(MENSAJES.sinCampos);
+
+  // 404 antes de validar: no se le dice nada al asesor sobre un paciente ajeno.
+  if (!(await leerUno(id, vendedorId))) throw noEncontrado();
+
+  const valores = validarCampos(cuerpo, presentes);
+  await revisarRepetidos(valores, id);
+
+  // "columna = ?" para cada campo presente. El nombre de la columna sale de COLUMNAS_EDITABLES.
+  const asignaciones = presentes.map((campo) => COLUMNAS_EDITABLES[campo] + ' = ?');
+  const parametros = presentes.map((campo) => valores[campo]);
+  const sql =
+    'UPDATE clientes SET ' +
+    asignaciones.join(', ') +
+    ', updated_at = NOW() WHERE id = ? AND vendedor_id = ?';
+
+  let resultado;
+  try {
+    resultado = await consulta(sql, [...parametros, id, vendedorId]);
+  } catch (err) {
+    throw traducirDuplicado(err);
+  }
+  // affectedRows cuenta las filas que cumplen el WHERE aunque no cambien (mysql2 usa FOUND_ROWS).
+  // Si es 0, el paciente dejó de ser suyo entre la lectura y el UPDATE.
+  if (resultado.affectedRows === 0) throw noEncontrado();
+
+  const fila = await leerUno(id, vendedorId);
   if (!fila) throw noEncontrado();
   res.json(formato.cliente(fila));
 });
