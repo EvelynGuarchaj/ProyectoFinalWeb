@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "CRM Dientecitos Felices · API del asesor",
-    "description": "Pruebas de la API (spec 02 en adelante). Antes de ejecutar: `php artisan migrate:fresh --seeder=VerificacionSeeder`, `npm run dev` en api/, y llenar las variables correo_valeria, correo_sergio, correo_ivan, correo_diego, correo_carlos y clave con los datos de VerificacionSeeder. Ejecute la carpeta en orden: unas peticiones usan variables que guardan otras.",
+    "name": "CRM Dientecitos Felices · API del asesor · Final",
+    "description": "Colección final de verificación de la API (161 peticiones, specs 02–23). Antes de ejecutar: `php artisan migrate:fresh --seeder=VerificacionSeeder`, `npm run dev` en api/, y llenar las variables correo_valeria, correo_sergio, correo_ivan, correo_diego, correo_carlos y clave con los datos de VerificacionSeeder. Ejecute las carpetas en orden: algunas peticiones guardan variables que usan otras. La carpeta Regla propia requiere además `php artisan migrate:fresh --seed` para cargar la semilla del sector. S8 (peticiones simultáneas) se ejecuta aparte con `npm run simultaneas` en api/.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
