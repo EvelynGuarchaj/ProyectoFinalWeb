@@ -1,6 +1,6 @@
 # 22 · Resumen del mes en la SPA
 
-**Estado:** Borrador
+**Estado:** Aprobado  
 **Depende de:** 10-spa-base (`estado.js`, `api.js`, `util.js`, `app.js` con delegación, indicador de carga y aviso), 15-api-resumen (B: `GET /reportes/resumen?mes=AAAA-MM`; hoy en la rama `origin/spec-15-api-resumen`, todavía no en `main`)
 **Fecha:** 2026-11-08
 **Dueña:** A
