@@ -2,7 +2,7 @@
 // Usa GET /actividades?estado=, GET /clientes, POST /clientes/:id/actividades y PATCH /actividades/:id.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar, fechaGT, errorCampo, claseError } from '../util.js';
+import { escapar, fechaGT, aISO, errorCampo, claseError } from '../util.js';
 import { TIPOS } from '../textos.js';
 
 // Datos de la vista con valores por omisión (spec 20, §2.1).
@@ -29,6 +29,11 @@ async function recargar(conClientes) {
     pedir('GET', '/clientes')
   ]);
   guardarDatos({ lista, clientes });
+}
+
+// Guarda lo escrito y los errores del formulario "Nueva actividad".
+function guardarFormulario(valores, errores) {
+  cambiar({ formularios: { ...estado.formularios, nuevaActividad: { valores, errores } } });
 }
 
 // ---------- Dibujo ----------
@@ -199,5 +204,52 @@ export default {
     }
   },
 
-  formularios: {}
+  formularios: {
+    // POST /clientes/:id/actividades (spec 20, §2.2).
+    async nuevaActividad(datos) {
+      const valores = {
+        cliente_id: datos.cliente_id || '',
+        tipo: datos.tipo || '',
+        descripcion: datos.descripcion || '',
+        vence_en: datos.vence_en || ''
+      };
+
+      // El paciente va en la URL: la API no puede devolver un 422 para él (D7).
+      if (!valores.cliente_id) {
+        guardarFormulario(valores, { cliente_id: 'Elija un paciente.' });
+        return;
+      }
+
+      // Lo escrito se guarda antes de pedir: cada cambiar() (también el del indicador de carga) redibuja.
+      guardarFormulario(valores, {});
+      cambiar({ aviso: null });
+
+      const cuerpo = { tipo: valores.tipo, descripcion: valores.descripcion };
+      if (valores.vence_en) cuerpo.vence_en = aISO(valores.vence_en);   // sin fecha, la clave no se envía (D12)
+
+      try {
+        await pedir('POST', `/clientes/${encodeURIComponent(valores.cliente_id)}/actividades`, cuerpo);
+      } catch (e) {
+        if (e.status === 422) {
+          guardarFormulario(valores, e.errores || {});
+          return;
+        }
+        if (e.status === 404) {
+          // El paciente ya no está en su cartera: se ponen al día la lista y el select.
+          await recargar(true);
+          guardarFormulario({ ...valores, cliente_id: '' }, {});
+          cambiar({ aviso: { tipo: 'danger', texto: e.message } });
+          return;
+        }
+        throw e;
+      }
+
+      // 201: la actividad nueva siempre es pendiente (D5).
+      const lista = await pedir('GET', '/actividades?estado=pendiente');
+      const { nuevaActividad, ...otros } = estado.formularios;
+      cambiar({ formularios: otros });
+      guardarDatos({ pestana: 'pendiente', lista });
+      cambiar({ aviso: { tipo: 'success', texto: 'Actividad registrada.' } });
+    }
+  }
 };
