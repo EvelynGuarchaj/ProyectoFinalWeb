@@ -165,6 +165,16 @@ const SQL_INSERTAR_LINEA = `
     FROM productos p
    WHERE p.id = ? AND p.activo = 1`;
 
+// Líneas: siempre con `oportunidad_id = ?` y después del candado de su plan.
+const SQL_LINEA_DEL_PLAN = 'SELECT id FROM oportunidad_productos WHERE id = ? AND oportunidad_id = ? LIMIT 1';
+
+// Solo la cantidad: precio_unitario no cambia nunca.
+const SQL_CAMBIAR_CANTIDAD = `
+  UPDATE oportunidad_productos SET cantidad = ?, updated_at = UTC_TIMESTAMP()
+   WHERE id = ? AND oportunidad_id = ?`;
+
+const SQL_BORRAR_LINEA = 'DELETE FROM oportunidad_productos WHERE id = ? AND oportunidad_id = ?';
+
 /**
  * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa }`,
  * o `undefined` si no existe o es ajeno.
@@ -185,6 +195,18 @@ async function bloquearPlanAbierto(cx, id, vendedorId) {
   if (!plan) throw noEncontrado();
   exigirAbierto(plan);
   return plan;
+}
+
+/**
+ * Candado de una línea: primero los 404 (plan y luego línea), después el 409 de plan cerrado.
+ * Así lo inexistente o ajeno responde igual en cualquier estado del plan.
+ */
+async function bloquearLinea(cx, id, lineaId, vendedorId) {
+  const plan = await bloquearPlan(cx, id, vendedorId);
+  if (!plan) throw noEncontrado();
+  const [lineas] = await cx.execute(SQL_LINEA_DEL_PLAN, [lineaId, id]);
+  if (lineas.length === 0) throw noEncontrado();
+  exigirAbierto(plan);
 }
 
 /**
@@ -374,4 +396,39 @@ rutasOportunidades.post('/:id/productos', async (req, res) => {
   }
 
   res.status(201).json(detalle);
+});
+
+// PATCH /api/oportunidades/:id/productos/:lineaId  { "cantidad": 3 }
+// Solo cambia la cantidad; precio_unitario y cualquier otro campo del cuerpo se ignoran.
+rutasOportunidades.patch('/:id/productos/:lineaId', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const lineaId = idDeRuta(req.params.lineaId);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  const detalle = await transaccion(async (cx) => {
+    await bloquearLinea(cx, id, lineaId, vendedorId);
+
+    const cantidad = cuerpo.cantidad;
+    if (!esCantidadValida(cantidad)) throw invalido({ cantidad: MENSAJES.cantidad });
+
+    await cx.execute(SQL_CAMBIAR_CANTIDAD, [cantidad, lineaId, id]);
+    return leerDetalle(ejecutarCon(cx), id, vendedorId);
+  });
+
+  res.json(detalle);
+});
+
+// DELETE /api/oportunidades/:id/productos/:lineaId → 204 sin cuerpo.
+rutasOportunidades.delete('/:id/productos/:lineaId', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const lineaId = idDeRuta(req.params.lineaId);
+  const vendedorId = req.usuario.id;
+
+  await transaccion(async (cx) => {
+    await bloquearLinea(cx, id, lineaId, vendedorId);
+    await cx.execute(SQL_BORRAR_LINEA, [lineaId, id]);
+  });
+
+  res.status(204).end();
 });
