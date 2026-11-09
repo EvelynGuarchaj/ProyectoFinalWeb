@@ -6,16 +6,37 @@ namespace App\Models;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password'])]
+/**
+ * Cuenta del sistema. En pantalla: Administrador, Coordinador (supervisor)
+ * o Asesor (vendedor). Especificación 3.2.
+ */
+#[Fillable(['name', 'email', 'password', 'rol', 'supervisor_id', 'activo'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    protected $table = 'users';
+
+    /** Rol en la base => nombre en pantalla. Lo usan la tabla, el filtro y el formulario de cuentas. */
+    public const ROLES = [
+        'administrador' => 'Administrador',
+        'supervisor' => 'Coordinador',
+        'vendedor' => 'Asesor',
+    ];
+
+    public function rolEnPantalla(): string
+    {
+        return self::ROLES[$this->rol] ?? $this->rol;
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -27,6 +48,55 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'activo' => 'boolean',
         ];
+    }
+
+    public function esAdmin(): bool
+    {
+        return $this->rol === 'administrador';
+    }
+
+    public function esSupervisor(): bool
+    {
+        return $this->rol === 'supervisor';
+    }
+
+    public function esVendedor(): bool
+    {
+        return $this->rol === 'vendedor';
+    }
+
+    /** Coordinador de este asesor. */
+    public function supervisor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'supervisor_id');
+    }
+
+    /**
+     * Asesores que la persona del panel puede ver en los filtros: el administrador,
+     * todos; el coordinador, los de su equipo. Activos y desactivados (spec 05 y spec 12).
+     */
+    public function scopeAsesoresVisiblesPara(Builder $query, User $u): Builder
+    {
+        return $query->where('rol', 'vendedor')
+            ->when(! $u->esAdmin(), fn (Builder $q) => $q->where('supervisor_id', $u->id));
+    }
+
+    /** Asesores que coordina este supervisor. */
+    public function vendedores(): HasMany
+    {
+        return $this->hasMany(User::class, 'supervisor_id');
+    }
+
+    /** Cartera del asesor. */
+    public function clientes(): HasMany
+    {
+        return $this->hasMany(Cliente::class, 'vendedor_id');
+    }
+
+    public function oportunidades(): HasMany
+    {
+        return $this->hasMany(Oportunidad::class, 'vendedor_id');
     }
 }
