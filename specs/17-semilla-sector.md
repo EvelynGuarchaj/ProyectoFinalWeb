@@ -1,6 +1,6 @@
 # 17 · Semilla del sector
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 01-esquema-y-semilla (tablas, `VerificacionSeeder`, `DatabaseSeeder`, migración `agregar_requiere_evaluacion`), 05-pacientes (`App\Support\Nit` y `App\Support\Telefono`, usados para validar los datos de este spec)
 **Fecha:** 2026-11-08
 **Dueña:** A
