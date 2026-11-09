@@ -18,7 +18,15 @@ const MENSAJES = {
   sinTratamientos: 'Agregue al menos un tratamiento antes de aceptar el plan.',
   motivoPerdida: 'Escriba el motivo (de 1 a 255 caracteres).',
   cambioSimultaneo: 'El plan cambió al mismo tiempo en otra petición. Recárguelo.',
+  productoId: 'Elija un tratamiento activo del catálogo.',
+  cantidad: 'La cantidad debe ser un número entero de 1 a 999.',
+  repetido: 'Ese tratamiento ya está en el plan; cambie su cantidad.',
 };
+
+// Cantidad de una línea: entero JSON de 1 a 999.
+function esCantidadValida(valor) {
+  return Number.isSafeInteger(valor) && valor >= 1 && valor <= 999;
+}
 
 // Marcador del mensaje de transición cuando `etapa` falta o no es texto.
 const SIN_ETAPA = '(sin etapa)';
@@ -26,6 +34,12 @@ const SIN_ETAPA = '(sin etapa)';
 // Índices únicos según la convención de Laravel (spec 01). Si `SHOW INDEX` muestra otros
 // nombres, se cambian aquí.
 const INDICE_HISTORIAL = 'historial_etapas_oportunidad_id_etapa_nueva_unique';
+const INDICE_LINEA = 'oportunidad_productos_oportunidad_id_producto_id_unique';
+
+// ¿Es un 1062 (ER_DUP_ENTRY) de ese índice único?
+function esDuplicadoDe(err, indice) {
+  return err?.code === 'ER_DUP_ENTRY' && String(err.sqlMessage ?? '').includes(indice);
+}
 
 // `cliente_id`, `producto_id` y `cantidad` solo se aceptan como enteros JSON:
 // "5", 5.5, null o la clave ausente no lo son.
@@ -136,6 +150,20 @@ const SQL_CERRAR = `
   UPDATE oportunidades
      SET etapa = ?, motivo_perdida = ?, fecha_cierre = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP()
    WHERE id = ?`;
+
+// Tratamientos del plan.
+const SQL_PRODUCTO_ACTIVO = 'SELECT id FROM productos WHERE id = ? AND activo = 1 LIMIT 1';
+
+const SQL_LINEA_REPETIDA =
+  'SELECT id FROM oportunidad_productos WHERE oportunidad_id = ? AND producto_id = ? LIMIT 1';
+
+// INSERT … SELECT: el precio sale de productos.precio, nunca del cuerpo.
+// Si el producto se desactivó en ese instante, inserta 0 filas.
+const SQL_INSERTAR_LINEA = `
+  INSERT INTO oportunidad_productos (oportunidad_id, producto_id, cantidad, precio_unitario, created_at, updated_at)
+  SELECT ?, p.id, ?, p.precio, UTC_TIMESTAMP(), UTC_TIMESTAMP()
+    FROM productos p
+   WHERE p.id = ? AND p.activo = 1`;
 
 /**
  * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa }`,
@@ -294,11 +322,56 @@ rutasOportunidades.patch('/:id/etapa', async (req, res) => {
     });
   } catch (err) {
     // Respaldo del FOR UPDATE: transaccion() ya revirtió, no queda ni el cambio ni el historial.
-    if (err?.code === 'ER_DUP_ENTRY' && String(err.sqlMessage ?? '').includes(INDICE_HISTORIAL)) {
+    if (esDuplicadoDe(err, INDICE_HISTORIAL)) {
       throw conflicto(MENSAJES.cambioSimultaneo);
     }
     throw err;
   }
 
   res.json(detalle);
+});
+
+// POST /api/oportunidades/:id/productos  { "producto_id": 1, "cantidad": 2 }
+// `precio_unitario` del cuerpo nunca se lee: el precio se copia del catálogo.
+rutasOportunidades.post('/:id/productos', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  let detalle;
+  try {
+    detalle = await transaccion(async (cx) => {
+      await bloquearPlanAbierto(cx, id, vendedorId);
+
+      // Todos los errores juntos en un solo 422.
+      const errores = {};
+      const productoId = cuerpo.producto_id;
+      if (!esEnteroPositivo(productoId)) {
+        errores.producto_id = MENSAJES.productoId;
+      } else {
+        const [activos] = await cx.execute(SQL_PRODUCTO_ACTIVO, [productoId]);
+        if (activos.length === 0) errores.producto_id = MENSAJES.productoId;
+      }
+      const cantidad = cuerpo.cantidad;
+      if (!esCantidadValida(cantidad)) errores.cantidad = MENSAJES.cantidad;
+      if (Object.keys(errores).length > 0) throw invalido(errores);
+
+      const [repetidas] = await cx.execute(SQL_LINEA_REPETIDA, [id, productoId]);
+      if (repetidas.length > 0) throw conflicto(MENSAJES.repetido);
+
+      // Regla propia (spec 13): si el producto requiere evaluación y el plan está en propuesta o negociacion, revisar la sección 2.3 → 409.
+
+      const [resultado] = await cx.execute(SQL_INSERTAR_LINEA, [id, cantidad, productoId]);
+      // El producto se desactivó entre la validación y el INSERT: no se insertó nada.
+      if (resultado.affectedRows === 0) throw invalido({ producto_id: MENSAJES.productoId });
+
+      return leerDetalle(ejecutarCon(cx), id, vendedorId);
+    });
+  } catch (err) {
+    // Respaldo de la consulta previa: transaccion() ya revirtió.
+    if (esDuplicadoDe(err, INDICE_LINEA)) throw conflicto(MENSAJES.repetido);
+    throw err;
+  }
+
+  res.status(201).json(detalle);
 });
