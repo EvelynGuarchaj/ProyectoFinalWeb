@@ -5322,6 +5322,371 @@
           }
         }
       ]
+    },
+    {
+      "name": "Resumen",
+      "description": "A6 y cifras de control de la sección 11.1 (spec 15). Ejecútela sola, justo después de `php artisan migrate:fresh --seeder=VerificacionSeeder`: las carpetas Clientes, Planes y Regla propia cambian la cartera y las ventas. Solo lee, así que se puede repetir sin recargar la semilla. Necesita las variables correo_valeria, correo_diego, correo_carlos y clave.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const internasResumen = ['password', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+              "pm.test('Sin llaves internas (password, vendedor_id, user_id, supervisor_id, usuario_id)', () => {",
+              "  const texto = pm.response.text();",
+              "  internasResumen.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "1. Login de Valeria → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_valeria está llena', () => pm.expect(pm.collectionVariables.get('correo_valeria'), 'Llene correo_valeria').to.not.be.empty);",
+                  "pm.test('La variable clave está llena', () => pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_valeria', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. Login de Diego → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_diego está llena', () => pm.expect(pm.collectionVariables.get('correo_diego'), 'Llene correo_diego').to.not.be.empty);",
+                  "pm.test('La variable clave está llena', () => pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_diego', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_diego}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "3. Login de Carlos → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_carlos está llena', () => pm.expect(pm.collectionVariables.get('correo_carlos'), 'Llene correo_carlos').to.not.be.empty);",
+                  "pm.test('La variable clave está llena', () => pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_carlos', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_carlos}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "4. GET /reportes/resumen?mes=2026-10 de Valeria → 2 ventas, Q9,250.00, pronóstico Q2,512.88, 3 de 10",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "// eql compara el cuerpo completo: falla si un monto llega como texto (\"9250.00\") o sobra una llave.",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({mes: '2026-10', ventas: 2, total: 9250, pronostico: 2512.88, cartera: {clientes: 3, maximo: 10}}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-10"
+          }
+        },
+        {
+          "name": "5. GET /reportes/resumen?mes=2026-11 de Valeria → 1 venta, Q3,600.00, el pronóstico no cambia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "// eql compara el cuerpo completo: falla si un monto llega como texto (\"9250.00\") o sobra una llave.",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({mes: '2026-11', ventas: 1, total: 3600, pronostico: 2512.88, cartera: {clientes: 3, maximo: 10}}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-11"
+          }
+        },
+        {
+          "name": "6. GET /reportes/resumen?mes=2026-10 de Diego → 1 venta, Q6,000.00, pronóstico Q112.50, 2 de 10",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "// eql compara el cuerpo completo: falla si un monto llega como texto (\"9250.00\") o sobra una llave.",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({mes: '2026-10', ventas: 1, total: 6000, pronostico: 112.5, cartera: {clientes: 2, maximo: 10}}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-10"
+          }
+        },
+        {
+          "name": "7. GET /reportes/resumen?mes=2026-10 de Carlos → 1 venta, Q7,200.00, pronóstico Q4,125.75, 9 de 10",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "// eql compara el cuerpo completo: falla si un monto llega como texto (\"9250.00\") o sobra una llave.",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({mes: '2026-10', ventas: 1, total: 7200, pronostico: 4125.75, cartera: {clientes: 9, maximo: 10}}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_carlos}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-10"
+          }
+        },
+        {
+          "name": "8. GET /reportes/resumen?mes=2020-01 de Valeria → sin ventas: 0 y 0 como números",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "// eql compara el cuerpo completo: falla si un monto llega como texto (\"9250.00\") o sobra una llave.",
+                  "pm.test('Cuerpo exacto', () => pm.expect(pm.response.json()).to.eql({mes: '2020-01', ventas: 0, total: 0, pronostico: 2512.88, cartera: {clientes: 3, maximo: 10}}));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2020-01"
+          }
+        },
+        {
+          "name": "9. GET /reportes/resumen sin mes de Valeria → mes actual de Guatemala",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "// Misma expresión que util/mes.js: Guatemala es UTC−6 fijo.",
+                  "const mesGuatemala = new Date(Date.now() - 6 * 3600 * 1000).toISOString().slice(0, 7);",
+                  "pm.test('mes es el mes actual en hora de Guatemala', () => pm.expect(cuerpo.mes).to.equal(mesGuatemala));",
+                  "pm.test('ventas y total son números', () => {",
+                  "  pm.expect(cuerpo.ventas).to.be.a('number');",
+                  "  pm.expect(cuerpo.total).to.be.a('number');",
+                  "});",
+                  "pm.test('Pronóstico 2512.88 y cartera 3 de 10', () => {",
+                  "  pm.expect(cuerpo.pronostico).to.equal(2512.88);",
+                  "  pm.expect(cuerpo.cartera).to.eql({ clientes: 3, maximo: 10 });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen"
+          }
+        },
+        {
+          "name": "10. GET /reportes/resumen?mes=2026-13 (mes 13) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje: Escriba el mes con el formato AAAA-MM.', () => pm.expect(pm.response.json()).to.eql({ error: 'Escriba el mes con el formato AAAA-MM.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-13"
+          }
+        },
+        {
+          "name": "11. GET /reportes/resumen?mes=2026-1 (mes de un dígito) → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje: Escriba el mes con el formato AAAA-MM.', () => pm.expect(pm.response.json()).to.eql({ error: 'Escriba el mes con el formato AAAA-MM.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/reportes/resumen?mes=2026-1"
+          }
+        },
+        {
+          "name": "12. GET /reportes/resumen?mes=2026-10 sin token → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje: Falta el token de acceso.', () => pm.expect(pm.response.json()).to.eql({ error: 'Falta el token de acceso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base}}/reportes/resumen?mes=2026-10"
+          }
+        }
+      ]
     }
   ],
   "event": [
