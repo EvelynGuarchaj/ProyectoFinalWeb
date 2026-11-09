@@ -3,7 +3,7 @@
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
 import { escapar, quetzales, fechaGT, errorCampo, claseError, mostrarError } from '../util.js';
-import { ETAPAS, CERRADAS } from '../textos.js';
+import { ETAPAS, ABIERTAS, CERRADAS } from '../textos.js';
 
 // Formularios de esta vista: se borran al cargar otro plan sin tocar los de otras vistas.
 const FORMULARIOS_PLAN = ['titulo', 'agregar', 'cantidad', 'rechazar'];
@@ -213,6 +213,53 @@ function tratamientosHtml(estado, datos) {
   </div>`;
 }
 
+// Botón de etapa: un form con botón submit para que la base lo desactive mientras hay peticiones.
+function botonEtapaHtml(etapa, texto, clase) {
+  return `<form data-form="etapa" class="d-grid">
+    <input type="hidden" name="etapa" value="${escapar(etapa)}">
+    <button type="submit" class="btn ${clase}">${escapar(texto)}</button>
+  </form>`;
+}
+
+function rechazoHtml(estado) {
+  const form = estado.formularios.rechazar;
+  if (!form) {
+    return `<button type="button" class="btn btn-outline-danger" data-accion="mostrarRechazo">Marcar como rechazado</button>`;
+  }
+  const errores = form.errores || {};
+  return `<form data-form="rechazar" novalidate class="w-100">
+    <label for="plan-motivo" class="form-label">Motivo del rechazo</label>
+    <textarea id="plan-motivo" name="motivo_perdida" rows="2"
+              class="form-control${claseError(errores, 'motivo_perdida')}">${escapar(form.valores.motivo_perdida)}</textarea>
+    ${errorCampo(errores, 'motivo_perdida')}
+    <div class="d-grid gap-2 d-md-flex mt-2">
+      <button type="submit" class="btn btn-danger">Confirmar rechazo</button>
+      <button type="button" class="btn btn-outline-secondary" data-accion="cancelarRechazo">Cancelar</button>
+    </div>
+  </form>`;
+}
+
+// Solo en planes abiertos. Las transiciones y la regla propia las decide la API.
+function etapaHtml(estado, plan) {
+  if (estaCerrado(plan)) return '';
+  let siguiente;
+  if (plan.etapa === 'negociacion') {
+    siguiente = botonEtapaHtml('ganada', 'Marcar como aceptado', 'btn-success');
+  } else {
+    const proxima = ABIERTAS[ABIERTAS.indexOf(plan.etapa) + 1];
+    siguiente = botonEtapaHtml(proxima, `Avanzar a ${ETAPAS[proxima]}`, 'btn-primary');
+  }
+  const rechazo = rechazoHtml(estado);
+  // Con el formulario del motivo abierto, este va en su propia fila.
+  const contenido = estado.formularios.rechazar
+    ? `<div class="d-grid gap-2 d-md-flex mb-3">${siguiente}</div>${rechazo}`
+    : `<div class="d-grid gap-2 d-md-flex">${siguiente}${rechazo}</div>`;
+  return `<div class="card mb-3">
+    <div class="card-header"><h2 class="h5 mb-0">Cambiar de etapa</h2></div>
+    <div class="card-body">${contenido}</div>
+  </div>`;
+}
+
 function filaHistorialHtml(h) {
   const anterior = h.etapa_anterior === null ? 'Creado' : ETAPAS[h.etapa_anterior];
   return `<li class="list-group-item">
@@ -262,6 +309,7 @@ export default {
     const plan = datos.plan;
     return `${encabezadoHtml(estado, plan)}
       ${tratamientosHtml(estado, datos)}
+      ${etapaHtml(estado, plan)}
       ${historialHtml(plan)}`;
   },
 
@@ -276,6 +324,14 @@ export default {
       // 204 sin cuerpo: se pide el detalle nuevo (el catálogo no cambia).
       const detalle = await pedir('GET', rutaPlan());
       aplicarDetalle(detalle, 'Se quitó el tratamiento del plan.');
+    },
+
+    mostrarRechazo() {
+      guardarFormulario('rechazar', { motivo_perdida: '' }, {});
+    },
+
+    cancelarRechazo() {
+      cambiar({ formularios: sinFormularios('rechazar') });
     }
   },
 
@@ -328,6 +384,42 @@ export default {
         return;
       }
       aplicarDetalle(detalle, 'Se cambió la cantidad.', 'cantidad');
+    },
+
+    async etapa(datos) {
+      const etapa = datos.etapa;
+      // No hay nada escrito que conservar: solo se quita el aviso anterior.
+      cambiar({ aviso: null });
+
+      let detalle;
+      try {
+        detalle = await pedir('PATCH', `${rutaPlan()}/etapa`, { etapa });
+      } catch (e) {
+        if (e.status === 422) {
+          // Transición no permitida o aceptado sin tratamientos: el botón no tiene campo
+          // donde mostrar el error, así que va como aviso (decidido por la integrante).
+          mostrarError({ ...e, message: (e.errores && e.errores.etapa) || e.message });
+        } else {
+          mostrarError(e); // 409 (regla propia, plan cerrado) y cualquier otro error
+        }
+        return;
+      }
+      aplicarDetalle(detalle, `El plan pasó a ${ETAPAS[etapa]}.`, 'rechazar');
+    },
+
+    async rechazar(datos) {
+      // El motivo viaja tal cual, sin recortar: lo valida la API.
+      const valores = { motivo_perdida: datos.motivo_perdida ?? '' };
+      antesDePedir('rechazar', valores);
+
+      let detalle;
+      try {
+        detalle = await pedir('PATCH', `${rutaPlan()}/etapa`, { etapa: 'perdida', motivo_perdida: valores.motivo_perdida });
+      } catch (e) {
+        atenderError(e, 'rechazar', valores);
+        return;
+      }
+      aplicarDetalle(detalle, 'El plan pasó a Rechazado.', 'rechazar');
     }
   }
 };
