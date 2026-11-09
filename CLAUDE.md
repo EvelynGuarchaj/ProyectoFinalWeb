@@ -69,3 +69,27 @@ Un plan que incluye un tratamiento con `productos.requiere_evaluacion = true` no
 - Pruebas del panel: `cd laravel && php artisan test`
 - API: `cd api && npm run dev` (http://localhost:3000/api)
 - SPA: Live Server sobre `frontend/` (http://127.0.0.1:5500)
+
+## Bitácora de IA (borradores automáticos)
+Cada integrante tiene su archivo de borradores: `docs/bitacora-a.md` (A) y
+`docs/bitacora-b.md` (B). Escribe solo en el de la persona con quien trabajas.
+
+Agrega un borrador **en el momento** cuando pase alguna de estas cosas:
+- la persona rechaza o corrige algo que tú propusiste porque violaba una regla
+  del enunciado, de la especificación o de este archivo;
+- una prueba o una cifra de control falla por código que tú escribiste y
+  luego se corrige;
+- un permiso o un hook bloquea una acción tuya.
+
+No anotes cambios de gusto o de estilo. Formato:
+
+### Borrador · <fecha> · <título corto>
+- **Spec / requisito:** <NN-slug> · <código>
+- **Qué propuse:** <descripción, con un fragmento corto si ayuda>
+- **Por qué estaba mal:** <regla que violaba>
+- **Cómo se detectó:** <la persona, prueba, cifra de control, permiso…>
+- **Corrección:** <qué se cambió> · commit `pendiente`
+- **Estado:** sin revisar
+
+Después de agregarlo, avisa en una línea: "Anoté un borrador en la bitácora."
+Nunca cambies "sin revisar" a "confirmado": eso lo hace la persona.
