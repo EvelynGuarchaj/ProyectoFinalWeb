@@ -9,6 +9,11 @@ import { conflicto, invalido, noEncontrado, peticionMala } from '../util/errores
 import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
 import { ABIERTAS, CERRADAS, ETAPAS, transicionPermitida } from '../util/etapas.js';
 import * as formato from '../util/formato.js';
+import { verificarEvaluacion } from '../util/reglaPropia.js';
+
+// Etapas que exigen la cita de evaluación si el plan tiene un tratamiento que la requiere
+// (sección 2.3). `perdida` no está: un plan se puede rechazar siempre (R-P7).
+const ETAPAS_CON_EVALUACION = Object.freeze(['propuesta', 'negociacion', 'ganada']);
 
 const MENSAJES = {
   filtroEtapa: 'El filtro etapa no es válido.',
@@ -310,7 +315,7 @@ rutasOportunidades.patch('/:id/etapa', async (req, res) => {
   let detalle;
   try {
     detalle = await transaccion(async (cx) => {
-      const { etapa: actual } = await bloquearPlanAbierto(cx, id, vendedorId);
+      const { etapa: actual, cliente_id: clienteId } = await bloquearPlanAbierto(cx, id, vendedorId);
       const nueva = cuerpo.etapa;
 
       // Saltos, retrocesos, la misma etapa o un valor que no es una etapa: 422.
@@ -331,7 +336,10 @@ rutasOportunidades.patch('/:id/etapa', async (req, res) => {
         if (motivo === null) throw invalido({ motivo_perdida: MENSAJES.motivoPerdida });
       }
 
-      // Regla propia (spec 13): si la etapa nueva es propuesta, negociacion o ganada, revisar la sección 2.3 de la especificación → 409.
+      // Regla propia (sección 2.3 de la especificación).
+      if (ETAPAS_CON_EVALUACION.includes(nueva)) {
+        await verificarEvaluacion(cx, id, clienteId);
+      }
 
       if (ABIERTAS.includes(nueva)) {
         await cx.execute(SQL_AVANZAR, [nueva, id]);
