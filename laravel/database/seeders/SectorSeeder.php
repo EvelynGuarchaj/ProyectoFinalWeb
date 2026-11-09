@@ -149,7 +149,91 @@ class SectorSeeder extends Seeder
      */
     private function oportunidades(array $usuarios, array $productos, array $clientes): void
     {
-        //
+        // Recorridos de etapas (sin retrocesos). Las abiertas usan el prefijo
+        // de $ganada hasta su etapa.
+        $ganada = ['prospecto', 'calificado', 'propuesta', 'negociacion', 'ganada'];
+        $perdidaEnNegociacion = ['prospecto', 'calificado', 'propuesta', 'negociacion', 'perdida'];
+        $hasta = fn (int $pasos) => array_slice($ganada, 0, $pasos);
+
+        // [título, paciente, asesor, recorrido, cierre UTC o null, motivo, líneas [tratamiento, cantidad]]
+        $lista = [
+            ['Ortodoncia completa', 'Sofía Ramírez', 'andrea@dental.test', $hasta(2), null, null,
+                [['Ortodoncia con brackets', 1]]],
+            ['Implante de molar', 'Jorge Cifuentes', 'andrea@dental.test', $hasta(4), null, null,
+                [['Implante dental', 1]]],
+            ['Limpieza para docentes', 'Colegio Bilingüe Los Altos', 'andrea@dental.test', $ganada, '2026-10-20 16:00:00', null,
+                [['Limpieza dental', 25]]],
+            ['Blanqueamiento', 'Mariela Chun', 'andrea@dental.test', $hasta(3), null, null,
+                [['Blanqueamiento', 1]]],
+            ['Endodoncia y corona', 'Rodrigo Tzoc', 'andrea@dental.test', $perdidaEnNegociacion, '2026-10-28 18:00:00', 'Decidió tratarse en otra clínica',
+                [['Endodoncia', 1], ['Corona de porcelana', 1]]],
+            ['Primera consulta', 'Gabriela Barrios', 'andrea@dental.test', $hasta(1), null, null,
+                []],
+            ['Resinas', 'Esteban Quemé', 'kevin@dental.test', $ganada, '2026-11-03 17:00:00', null,
+                [['Resina dental', 3]]],
+            ['Extracción de cordales', 'Paola Fernández', 'kevin@dental.test', $hasta(4), null, null,
+                [['Extracción de cordal', 2]]],
+            ['Limpieza anual', 'Textiles del Altiplano', 'kevin@dental.test', $hasta(2), null, null,
+                [['Limpieza dental', 12]]],
+            ['Implante dental', 'Héctor Sapón', 'kevin@dental.test', $hasta(2), null, null,
+                [['Implante dental', 1]]],
+            ['Ortodoncia', 'Claudia Ixcot', 'kevin@dental.test', $hasta(1), null, null,
+                [['Ortodoncia con brackets', 1]]],
+            // Plan anterior a que el implante se marcara como "requiere evaluación"
+            // (decisión D2): permite demostrar R-P6.
+            ['Implante de premolar', 'Marco Ajanel', 'kevin@dental.test', $hasta(4), null, null,
+                [['Implante dental', 1]]],
+        ];
+
+        // El precio de la línea se copia del catálogo al agregar.
+        $precios = DB::table('productos')->whereIn('id', $productos)->pluck('precio', 'id');
+
+        foreach ($lista as [$titulo, $cliente, $vendedor, $recorrido, $cierre, $motivo, $lineas]) {
+            $vendedorId = $usuarios[$vendedor];
+
+            // Fechas del historial: cada 3 días hacia atrás desde la fecha final.
+            $fin = CarbonImmutable::parse($cierre ?? self::FIN_ABIERTAS, 'UTC');
+            $pasos = count($recorrido);
+            $fechas = [];
+            for ($i = 0; $i < $pasos; $i++) {
+                $fechas[] = $fin->subDays(self::DIAS_ENTRE_REGISTROS * ($pasos - 1 - $i));
+            }
+            $creacion = $fechas[0];
+
+            $oportunidadId = DB::table('oportunidades')->insertGetId([
+                'cliente_id' => $clientes[$cliente],
+                'vendedor_id' => $vendedorId,
+                'titulo' => $titulo,
+                'etapa' => end($recorrido),
+                'motivo_perdida' => $motivo,
+                'fecha_cierre' => $cierre,
+                'created_at' => $creacion,
+                'updated_at' => $fin,
+            ]);
+
+            foreach ($lineas as [$producto, $cantidad]) {
+                DB::table('oportunidad_productos')->insert([
+                    'oportunidad_id' => $oportunidadId,
+                    'producto_id' => $productos[$producto],
+                    'cantidad' => $cantidad,
+                    'precio_unitario' => $precios[$productos[$producto]],
+                    'created_at' => $creacion,
+                    'updated_at' => $creacion,
+                ]);
+            }
+
+            $anterior = null;
+            foreach ($recorrido as $i => $etapa) {
+                DB::table('historial_etapas')->insert([
+                    'oportunidad_id' => $oportunidadId,
+                    'usuario_id' => $vendedorId,
+                    'etapa_anterior' => $anterior,
+                    'etapa_nueva' => $etapa,
+                    'created_at' => $fechas[$i],
+                ]);
+                $anterior = $etapa;
+            }
+        }
     }
 
     /**
