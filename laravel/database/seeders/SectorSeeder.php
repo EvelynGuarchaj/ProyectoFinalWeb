@@ -242,6 +242,30 @@ class SectorSeeder extends Seeder
      */
     private function actividades(array $usuarios, array $clientes, CarbonImmutable $ahora): void
     {
-        //
+        // [paciente, asesor, tipo, descripción, vence UTC, completada]
+        // Para la regla propia cuentan solo las "reunion" completadas:
+        // Jorge y Héctor sí tienen evaluación; Sofía y Claudia solo una pendiente.
+        $lista = [
+            ['Jorge Cifuentes', 'andrea@dental.test', 'reunion', 'Cita de evaluación para implante', '2026-10-10 15:00:00', true],
+            ['Héctor Sapón', 'kevin@dental.test', 'reunion', 'Cita de evaluación con radiografía', '2026-10-30 15:00:00', true],
+            ['Sofía Ramírez', 'andrea@dental.test', 'reunion', 'Cita de evaluación de ortodoncia', '2026-11-20 15:00:00', false],
+            ['Mariela Chun', 'andrea@dental.test', 'llamada', 'Confirmar presupuesto de blanqueamiento', '2026-11-25 15:00:00', false],
+            ['Paola Fernández', 'kevin@dental.test', 'tarea', 'Enviar presupuesto de cordales', '2026-11-01 15:00:00', false],
+            ['Colegio Bilingüe Los Altos', 'andrea@dental.test', 'llamada', 'Coordinar horarios de limpieza', '2026-10-18 15:00:00', true],
+            ['Claudia Ixcot', 'kevin@dental.test', 'reunion', 'Agendar evaluación de ortodoncia', '2026-11-28 15:00:00', false],
+        ];
+
+        foreach ($lista as [$cliente, $vendedor, $tipo, $descripcion, $vence, $completada]) {
+            DB::table('actividades')->insert([
+                'cliente_id' => $clientes[$cliente],
+                'vendedor_id' => $usuarios[$vendedor],
+                'tipo' => $tipo,
+                'descripcion' => $descripcion,
+                'vence_en' => $vence,
+                'completada' => $completada,
+                'created_at' => $ahora,
+                'updated_at' => $ahora,
+            ]);
+        }
     }
 }
