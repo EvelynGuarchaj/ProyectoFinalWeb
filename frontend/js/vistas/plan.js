@@ -114,28 +114,102 @@ function encabezadoHtml(estado, plan) {
   </div>`;
 }
 
-// Una línea de tratamiento. Abierto: precio guardado y subtotal (los formularios llegan en el paso 4).
-function lineaHtml(linea, cerrado) {
+// Formulario de cantidad de una línea. Solo la línea que se envió (formularios.cantidad.lineaId)
+// muestra lo escrito y su error; las demás muestran la cantidad de la API.
+function cantidadFormHtml(estado, linea) {
+  const form = estado.formularios.cantidad;
+  const esEsta = form && String(form.lineaId) === String(linea.id);
+  const errores = esEsta ? form.errores : {};
+  const valor = esEsta ? form.valores.cantidad : linea.cantidad;
+  const idCampo = `cantidad-${escapar(linea.id)}`;
+  return `<form data-form="cantidad" novalidate class="mt-2">
+    <input type="hidden" name="lineaId" value="${escapar(linea.id)}">
+    <div class="row g-2 align-items-start">
+      <div class="col-12 col-md-4">
+        <label for="${idCampo}" class="form-label small">Cantidad</label>
+        <input type="number" id="${idCampo}" name="cantidad" min="1" max="999" step="1"
+               class="form-control form-control-sm${claseError(errores, 'cantidad')}" value="${escapar(valor)}">
+        ${errorCampo(errores, 'cantidad')}
+      </div>
+      <div class="col-12 col-md-8 d-grid gap-2 d-md-flex align-self-md-end">
+        <button type="submit" class="btn btn-sm btn-outline-primary">Cambiar cantidad</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" data-accion="quitar"
+                data-id="${escapar(linea.id)}">Quitar</button>
+      </div>
+    </div>
+  </form>`;
+}
+
+// Una línea de tratamiento. Cerrado: solo lectura. Abierto: precio guardado, subtotal y su formulario.
+function lineaHtml(estado, linea, cerrado) {
   const detalle = cerrado
     ? `<div class="small">${quetzales(linea.precio_unitario)} × ${escapar(linea.cantidad)} = ${quetzales(linea.subtotal)}</div>`
     : `<div class="small">Precio guardado: ${quetzales(linea.precio_unitario)}</div>
-       <div class="small">Subtotal: ${quetzales(linea.subtotal)}</div>`;
+       <div class="small">Subtotal: ${quetzales(linea.subtotal)}</div>
+       ${cantidadFormHtml(estado, linea)}`;
   return `<li class="list-group-item">
     <div class="fw-semibold texto-largo">${escapar(linea.nombre)}</div>
     ${detalle}
   </li>`;
 }
 
-function tratamientosHtml(plan) {
+// Formulario "Agregar tratamiento": el <select> solo ofrece los tratamientos que aún no están en el plan.
+function agregarHtml(estado, plan, productos) {
+  const enPlan = new Set((plan.productos || []).map((l) => String(l.producto_id)));
+  const disponibles = (productos || []).filter((p) => !enPlan.has(String(p.id)));
+  if (disponibles.length === 0) {
+    return '<p class="text-muted mb-0">Ya agregó todos los tratamientos del catálogo.</p>';
+  }
+
+  const form = estado.formularios.agregar;
+  const valores = form ? form.valores : { producto_id: '', cantidad: 1 };
+  const errores = form ? form.errores : {};
+  const elegido = String(valores.producto_id ?? '');
+  const opciones = disponibles.map((p) => {
+    const seleccionada = String(p.id) === elegido ? ' selected' : '';
+    const evaluacion = p.requiere_evaluacion ? ' · Requiere evaluación' : '';
+    return `<option value="${escapar(p.id)}"${seleccionada}>${escapar(p.nombre)} · ${quetzales(p.precio)}${evaluacion}</option>`;
+  }).join('');
+
+  return `<h3 class="h6">Agregar tratamiento</h3>
+    <form data-form="agregar" novalidate>
+      <div class="row g-2 align-items-start">
+        <div class="col-12 col-md-7">
+          <label for="agregar-producto" class="form-label">Tratamiento</label>
+          <select id="agregar-producto" name="producto_id" class="form-select texto-largo${claseError(errores, 'producto_id')}">
+            <option value="">Elija un tratamiento</option>
+            ${opciones}
+          </select>
+          ${errorCampo(errores, 'producto_id')}
+        </div>
+        <div class="col-12 col-md-3">
+          <label for="agregar-cantidad" class="form-label">Cantidad</label>
+          <input type="number" id="agregar-cantidad" name="cantidad" min="1" max="999" step="1"
+                 class="form-control${claseError(errores, 'cantidad')}" value="${escapar(valores.cantidad)}">
+          ${errorCampo(errores, 'cantidad')}
+        </div>
+        <div class="col-12 col-md-2 d-grid align-self-md-end">
+          <button type="submit" class="btn btn-primary">Agregar</button>
+        </div>
+      </div>
+    </form>`;
+}
+
+function tratamientosHtml(estado, datos) {
+  const plan = datos.plan;
   const cerrado = estaCerrado(plan);
   const lineas = plan.productos || [];
   const lista = lineas.length
-    ? `<ul class="list-group list-group-flush">${lineas.map((l) => lineaHtml(l, cerrado)).join('')}</ul>`
+    ? `<ul class="list-group list-group-flush">${lineas.map((l) => lineaHtml(estado, l, cerrado)).join('')}</ul>`
     : '<div class="card-body"><p class="text-muted mb-0">Este plan aún no tiene tratamientos.</p></div>';
+  const agregar = cerrado
+    ? ''
+    : `<div class="card-body border-top">${agregarHtml(estado, plan, datos.productos)}</div>`;
   return `<div class="card mb-3">
     <div class="card-header"><h2 class="h5 mb-0">Tratamientos</h2></div>
     ${lista}
     <div class="card-footer fw-semibold">Total: ${quetzales(plan.total)}</div>
+    ${agregar}
   </div>`;
 }
 
@@ -187,11 +261,23 @@ export default {
 
     const plan = datos.plan;
     return `${encabezadoHtml(estado, plan)}
-      ${tratamientosHtml(plan)}
+      ${tratamientosHtml(estado, datos)}
       ${historialHtml(plan)}`;
   },
 
-  acciones: {},
+  acciones: {
+    async quitar(elemento) {
+      // Un doble clic no manda un segundo DELETE (respondería 404).
+      if (estado.cargando > 0) return;
+      const lineaId = elemento.dataset.id;
+      cambiar({ aviso: null });
+      // Los errores (404, 409, API apagada) los atiende app.js con mostrarError.
+      await pedir('DELETE', `${rutaPlan()}/productos/${encodeURIComponent(lineaId)}`);
+      // 204 sin cuerpo: se pide el detalle nuevo (el catálogo no cambia).
+      const detalle = await pedir('GET', rutaPlan());
+      aplicarDetalle(detalle, 'Se quitó el tratamiento del plan.');
+    }
+  },
 
   formularios: {
     async titulo(datos) {
@@ -207,6 +293,41 @@ export default {
         return;
       }
       aplicarDetalle(detalle, 'Se guardó el título.', 'titulo');
+    },
+
+    async agregar(datos) {
+      const valores = { producto_id: datos.producto_id ?? '', cantidad: datos.cantidad ?? '' };
+      antesDePedir('agregar', valores);
+
+      let detalle;
+      try {
+        // Números JSON: sin tratamiento viaja null; cantidad vacía → 0, texto → NaN → null (422).
+        detalle = await pedir('POST', `${rutaPlan()}/productos`, {
+          producto_id: valores.producto_id === '' ? null : Number(valores.producto_id),
+          cantidad: Number(valores.cantidad)
+        });
+      } catch (e) {
+        atenderError(e, 'agregar', valores);
+        return;
+      }
+      aplicarDetalle(detalle, 'Se agregó el tratamiento al plan.', 'agregar');
+    },
+
+    async cantidad(datos) {
+      const lineaId = datos.lineaId;
+      const valores = { cantidad: datos.cantidad ?? '' };
+      antesDePedir('cantidad', valores, { lineaId });
+
+      let detalle;
+      try {
+        detalle = await pedir('PATCH', `${rutaPlan()}/productos/${encodeURIComponent(lineaId)}`, {
+          cantidad: Number(valores.cantidad)
+        });
+      } catch (e) {
+        atenderError(e, 'cantidad', valores, { lineaId });
+        return;
+      }
+      aplicarDetalle(detalle, 'Se cambió la cantidad.', 'cantidad');
     }
   }
 };
