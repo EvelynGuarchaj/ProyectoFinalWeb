@@ -9,6 +9,7 @@ import { rutasAuth } from './rutas/auth.js';
 import { rutasYo } from './rutas/yo.js';
 import { rutasClientes } from './rutas/clientes.js';
 import { rutasActividades, rutasActividadesDeCliente } from './rutas/actividades.js';
+import { rutasProductos } from './rutas/productos.js';
 
 export const app = express();
 
@@ -37,6 +38,7 @@ api.use('/clientes', rutasClientes);
 // POST /clientes/:id/actividades: rutasClientes no la tiene, así que Express sigue a este router.
 api.use('/clientes', rutasActividadesDeCliente);
 api.use('/actividades', rutasActividades);
+api.use('/productos', rutasProductos);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
