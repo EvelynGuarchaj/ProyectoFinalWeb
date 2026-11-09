@@ -1,6 +1,6 @@
 # 08 · API de actividades
 
-**Estado:** Borrador
+**Estado:** Aprobado
 **Depende de:** SPEC 01 (`01-esquema-y-semilla`: tabla `actividades` y las 4 actividades de la semilla de verificación), SPEC 02 (`02-api-base-login`: `db.js`, `util/errores.js`, `util/validar.js` y `middleware/auth.js`) y SPEC 06 (`06-api-clientes`: `util/formato.js` y el montaje de `/api/clientes`)
 **Fecha:** 2026-11-08
 **Dueña:** B
