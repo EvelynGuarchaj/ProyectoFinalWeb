@@ -1,6 +1,6 @@
 # 20 · Actividades en la SPA
 
-**Estado:** Aprobado
+**Estado:** Implementado
 **Depende de:** 10-spa-base (`estado.js`, `api.js`, `util.js` con `fechaGT`, `aISO`, `escapar`, `errorCampo`, `claseError` y `mostrarError`, `textos.js` con `TIPOS`, `app.js` con delegación, indicador de carga y aviso), 08-api-actividades (B: `GET /actividades?estado=`, `POST /clientes/:id/actividades` y `PATCH /actividades/:id`; hoy en la rama `origin/spec-08-api-actividades`, todavía no en `main`; su spec todavía no existe en `specs/`), 06-api-clientes (B: `GET /clientes`; hoy en `origin/spec-06-api-clientes`, todavía no en `main`; su spec todavía no existe en `specs/`)
 **Fecha:** 2026-11-08
 **Dueña:** A
