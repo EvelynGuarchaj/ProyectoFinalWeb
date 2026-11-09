@@ -11,6 +11,7 @@ import { rutasClientes } from './rutas/clientes.js';
 import { rutasActividades, rutasActividadesDeCliente } from './rutas/actividades.js';
 import { rutasProductos } from './rutas/productos.js';
 import { rutasOportunidades } from './rutas/oportunidades.js';
+import { rutasReportes } from './rutas/reportes.js';
 
 export const app = express();
 
@@ -41,6 +42,7 @@ api.use('/clientes', rutasActividadesDeCliente);
 api.use('/actividades', rutasActividades);
 api.use('/productos', rutasProductos);
 api.use('/oportunidades', rutasOportunidades);
+api.use('/reportes', rutasReportes);
 app.use('/api', api);
 
 // Ninguna ruta respondió.
