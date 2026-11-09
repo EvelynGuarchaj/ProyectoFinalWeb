@@ -11,6 +11,18 @@ const FORMULARIOS_PLAN = ['titulo', 'agregar', 'cantidad', 'rechazar'];
 // Marca de "el plan no existe o no es suyo" (404 de GET /oportunidades/:id).
 const NO_ENCONTRADO = { noEncontrado: true };
 
+let cargaActual = 0;
+let idCargado = null;
+
+function contextoPlan() {
+  return { carga: cargaActual, id: String(estado.params.id), sesion: estado.sesion };
+}
+
+function sigueActivo(contexto) {
+  return estado.ruta === 'plan' && contexto.carga === cargaActual
+    && contexto.id === String(estado.params.id) && contexto.sesion === estado.sesion;
+}
+
 // Ruta del plan activo, con el id de la URL codificado.
 function rutaPlan() {
   return '/oportunidades/' + encodeURIComponent(estado.params.id);
@@ -282,26 +294,37 @@ export default {
   titulo: 'Detalle del plan',
 
   async cargar(params) {
-    // Un solo cambiar(): nunca se ve el plan anterior ni sus errores mientras llega el nuevo.
+    ++cargaActual;
+    idCargado = String(params.id);
+    const contexto = contextoPlan();
+    // Limpia los datos y errores antes de pedir el nuevo detalle.
     const formularios = { ...estado.formularios };
     for (const nombre of FORMULARIOS_PLAN) delete formularios[nombre];
     cambiar({ datos: { ...estado.datos, plan: null }, formularios });
 
     // Las dos en paralelo. Solo el 404 del plan se dibuja como "No se encontró el plan.";
     // cualquier otro error lo atiende app.js (mostrarError).
-    const [plan, productos] = await Promise.all([
-      pedir('GET', rutaPlan()).catch((e) => {
-        if (e.status === 404) return NO_ENCONTRADO;
-        throw e;
-      }),
-      pedir('GET', '/productos')
-    ]);
+    let plan, productos;
+    try {
+      [plan, productos] = await Promise.all([
+        pedir('GET', rutaPlan()).catch((e) => {
+          if (e.status === 404) return NO_ENCONTRADO;
+          throw e;
+        }),
+        pedir('GET', '/productos')
+      ]);
+    } catch (e) {
+      if (!sigueActivo(contexto)) return;
+      throw e;
+    }
+    if (!sigueActivo(contexto)) return;
 
     const datosPlan = plan === NO_ENCONTRADO ? NO_ENCONTRADO : { plan, productos };
     cambiar({ datos: { ...estado.datos, plan: datosPlan } });
   },
 
   render(estado) {
+    if (idCargado !== String(estado.params.id)) return '';
     const datos = estado.datos.plan;
     if (!datos) return ''; // cargando: el indicador de la base ya se ve
     if (datos.noEncontrado) return noEncontradoHtml();
@@ -317,12 +340,27 @@ export default {
     async quitar(elemento) {
       // Un doble clic no manda un segundo DELETE (respondería 404).
       if (estado.cargando > 0) return;
+      const contexto = contextoPlan();
+      const ruta = rutaPlan();
       const lineaId = elemento.dataset.id;
       cambiar({ aviso: null });
       // Los errores (404, 409, API apagada) los atiende app.js con mostrarError.
-      await pedir('DELETE', `${rutaPlan()}/productos/${encodeURIComponent(lineaId)}`);
+      try {
+        await pedir('DELETE', `${ruta}/productos/${encodeURIComponent(lineaId)}`);
+      } catch (e) {
+        if (!sigueActivo(contexto)) return;
+        throw e;
+      }
+      if (!sigueActivo(contexto)) return;
       // 204 sin cuerpo: se pide el detalle nuevo (el catálogo no cambia).
-      const detalle = await pedir('GET', rutaPlan());
+      let detalle;
+      try {
+        detalle = await pedir('GET', ruta);
+      } catch (e) {
+        if (!sigueActivo(contexto)) return;
+        throw e;
+      }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, 'Se quitó el tratamiento del plan.');
     },
 
@@ -337,6 +375,7 @@ export default {
 
   formularios: {
     async titulo(datos) {
+      const contexto = contextoPlan();
       // El título viaja tal cual, sin recortar: lo valida la API.
       const valores = { titulo: datos.titulo ?? '' };
       antesDePedir('titulo', valores);
@@ -345,13 +384,16 @@ export default {
       try {
         detalle = await pedir('PATCH', rutaPlan(), { titulo: valores.titulo });
       } catch (e) {
+        if (!sigueActivo(contexto)) return;
         atenderError(e, 'titulo', valores);
         return;
       }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, 'Se guardó el título.', 'titulo');
     },
 
     async agregar(datos) {
+      const contexto = contextoPlan();
       const valores = { producto_id: datos.producto_id ?? '', cantidad: datos.cantidad ?? '' };
       antesDePedir('agregar', valores);
 
@@ -363,13 +405,16 @@ export default {
           cantidad: Number(valores.cantidad)
         });
       } catch (e) {
+        if (!sigueActivo(contexto)) return;
         atenderError(e, 'agregar', valores);
         return;
       }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, 'Se agregó el tratamiento al plan.', 'agregar');
     },
 
     async cantidad(datos) {
+      const contexto = contextoPlan();
       const lineaId = datos.lineaId;
       const valores = { cantidad: datos.cantidad ?? '' };
       antesDePedir('cantidad', valores, { lineaId });
@@ -380,13 +425,16 @@ export default {
           cantidad: Number(valores.cantidad)
         });
       } catch (e) {
+        if (!sigueActivo(contexto)) return;
         atenderError(e, 'cantidad', valores, { lineaId });
         return;
       }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, 'Se cambió la cantidad.', 'cantidad');
     },
 
     async etapa(datos) {
+      const contexto = contextoPlan();
       const etapa = datos.etapa;
       // No hay nada escrito que conservar: solo se quita el aviso anterior.
       cambiar({ aviso: null });
@@ -395,6 +443,7 @@ export default {
       try {
         detalle = await pedir('PATCH', `${rutaPlan()}/etapa`, { etapa });
       } catch (e) {
+        if (!sigueActivo(contexto)) return;
         if (e.status === 422) {
           // Transición no permitida o aceptado sin tratamientos: el botón no tiene campo
           // donde mostrar el error, así que va como aviso (decidido por la integrante).
@@ -404,10 +453,12 @@ export default {
         }
         return;
       }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, `El plan pasó a ${ETAPAS[etapa]}.`, 'rechazar');
     },
 
     async rechazar(datos) {
+      const contexto = contextoPlan();
       // El motivo viaja tal cual, sin recortar: lo valida la API.
       const valores = { motivo_perdida: datos.motivo_perdida ?? '' };
       antesDePedir('rechazar', valores);
@@ -416,9 +467,11 @@ export default {
       try {
         detalle = await pedir('PATCH', `${rutaPlan()}/etapa`, { etapa: 'perdida', motivo_perdida: valores.motivo_perdida });
       } catch (e) {
+        if (!sigueActivo(contexto)) return;
         atenderError(e, 'rechazar', valores);
         return;
       }
+      if (!sigueActivo(contexto)) return;
       aplicarDetalle(detalle, 'El plan pasó a Rechazado.', 'rechazar');
     }
   }

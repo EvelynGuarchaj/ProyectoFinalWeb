@@ -7,6 +7,10 @@
 **Rama:** `spec-21-spa-plan`
 **Objetivo:** reemplazar la vista provisional `#/plan/:id` por el detalle del plan, donde el asesor edita el título, agrega, cambia y quita tratamientos, mueve el plan de etapa y ve su historial.
 
+**Situación de implementación (2026-11-08):** los seis pasos están implementados. Se corrigieron en `plan.js` las respuestas tardías y la visualización del detalle de otro ID antes de cargar. CA1 confirmado por B; CA2 parcial (faltan planes ajenos); CA14 comprobado automáticamente. CA11 comprobado en simulación de la vista, pendiente en navegador. Los demás criterios siguen pendientes de verificación integrada, según `docs/verificacion.md` §2.4. Las 45 pruebas unitarias de la API pasan; no equivalen a aceptación de la SPA. La spec no se considera cerrada ni se marca Implementado con estas verificaciones pendientes.
+
+La integrante solicitó expresamente actualizar la documentación de B en esta rama, sin cambiar de rama; esto exceptúa para esta revisión la separación documental prevista en el alcance.
+
 **Requisitos que cumple:** F3 de `docs/especificacion.md`, parte del detalle (`#/plan/:id`), y sobre `#/plan/:id` las comprobaciones de F6 (delegación, indicador de carga, API apagada, `escapar()` (S7) y 375 px).
 
 ---
@@ -137,6 +141,10 @@ Patrón común de los formularios:
 
 Los formularios se guardan y se borran sin tocar los de otras vistas (`{ ...estado.formularios }`). El texto del aviso no se escapa al armarlo: el layout ya pasa `aviso.texto` por `escapar()`.
 
+Excepciones del formulario `etapa` al patrón común:
+- **No se guarda en `estado.formularios`:** no tiene nada escrito que conservar, y `cargar()` no lo borraría al pasar a otro plan. Antes de pedir solo se quita el aviso (`aviso: null`).
+- **El 422 va como aviso:** la API responde 422 con la clave `etapa` (transición no permitida, o aceptado sin tratamientos). Como el botón no tiene campo donde mostrar el error, se pone como aviso `danger` con el texto de `e.errores.etapa` (o `e.message` si no viene).
+
 ---
 
 ## 3. Plan de implementación
@@ -191,6 +199,8 @@ Semilla: `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo que se di
 | "Marcar como rechazado" abre el formulario con `formularios.rechazar` y lo cierra "Cancelar" | `<details>` de HTML | Decidido por la integrante. El estado sobrevive a cada redibujo y a un 422; un `<details>` se cerraría al redibujar |
 | Aviso `success` tras cada cambio correcto | Solo redibujar | Decidido por la integrante. Confirma la acción también a 375 px, donde el cambio puede quedar fuera de la pantalla |
 | Los botones de etapa son `form data-form="etapa"` con botón submit | `data-accion` en un botón | La base desactiva los submit mientras hay peticiones: un doble clic no manda dos cambios de etapa (mismo criterio que "Tomar" en el spec 18) |
+| El 422 del formulario `etapa` se muestra como aviso `danger` con `e.errores.etapa` | Guardar el error en `formularios.etapa` (patrón común), o dibujarlo dentro de la tarjeta "Cambiar de etapa" | Decidido por la integrante durante la implementación. Con el patrón común el asesor no vería nada, porque el botón no tiene campo; así se ve igual que un 409 |
+| El formulario `etapa` no se guarda en `estado.formularios` | Guardarlo como los demás formularios | No tiene nada escrito que conservar, y `cargar()` no lo limpiaría al cambiar de plan |
 | "Quitar" es `data-accion="quitar"` y no hace nada si `estado.cargando > 0` | Un formulario por línea | Decidido por la integrante (`data-accion`); la guarda evita un segundo `DELETE` que respondería 404 |
 | Tras un 200/201 se usa el detalle que devuelve la API; tras el 204 de quitar, solo `GET /oportunidades/:id` | Volver a llamar `cargar()` completo | Decidido por la integrante. `cargar()` borraría los formularios y el catálogo no cambia por quitar una línea |
 | 409 y otros errores con `mostrarError(e)` | Un mensaje propio por formulario | F3 pide los 409 como aviso con el mensaje de la API; `mostrarError` ya hace eso |
@@ -205,7 +215,7 @@ Semilla: `php artisan migrate:fresh --seeder=VerificacionSeeder` salvo que se di
 ## 6. Riesgos
 
 - **Redibujar borra lo escrito.** Cada `cambiar()` reemplaza el `innerHTML`; por eso cada formulario guarda sus `valores` **antes** de pedir (igual que en los specs 18 y 19).
-- **Respuesta tardía de otro plan.** Si el asesor sale del detalle mientras una petición sigue en curso, su respuesta llega después a `datos.plan`. Se acepta: `cargar()` del plan nuevo vuelve a limpiar y pedir, y la lentitud solo ocurre con red lenta.
+- **Respuesta tardía de otro plan.** Cada carga y operación captura la generación de carga, ID y sesión; antes de aplicar resultados o errores comprueba que siguen activos. Quitar conserva la ruta original y no pide el detalle si el asesor ya salió. `render()` oculta datos de otro ID incluso antes de que la base llame a `cargar()`. Verificado con respuestas diferidas en memoria; pendiente el navegador. La base de A redibuja antes de cargar, por lo que volver al mismo ID requiere comprobación integrada; no se modificó `app.js`.
 - **Plan reasignado o cerrado en otra pestaña.** Un cambio sobre un plan que ya no es suyo responde 404 y uno cerrado 409; los dos se ven como aviso y el detalle queda como estaba hasta que se recargue.
 - **`total` o `precio_unitario` como texto.** `quetzales()` los convierte con `Number()`; no se suma nada en el navegador.
 - **Muchos formularios a 375 px.** Si un plan tiene muchas líneas, la página se alarga; no se usa desplazamiento horizontal. Si hiciera falta un ajuste de estilos, se le pide a A.
