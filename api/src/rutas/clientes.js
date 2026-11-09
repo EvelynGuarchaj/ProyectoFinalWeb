@@ -9,9 +9,7 @@ import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
 import * as nit from '../util/nit.js';
 import * as telefono from '../util/telefono.js';
 import * as formato from '../util/formato.js';
-
-// Cartera máxima de un asesor (regla del proyecto). El spec 15 la podrá mover a un archivo común.
-const MAXIMO_CARTERA = 10;
+import { MAXIMO_CARTERA } from '../util/cartera.js';
 
 // Nombres de los índices únicos de `clientes` (convención de Laravel: tabla_columna_unique).
 // Si SHOW INDEX FROM clientes muestra otros, se cambian aquí.
