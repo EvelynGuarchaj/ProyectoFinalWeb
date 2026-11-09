@@ -2,7 +2,7 @@
 // y el formulario para crear un plan. Spec 19. Totales y probabilidades salen de la API tal cual.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar, quetzales, fechaGT } from '../util.js';
+import { escapar, quetzales, fechaGT, errorCampo, claseError, mostrarError } from '../util.js';
 import { ETAPAS, ABIERTAS, CERRADAS } from '../textos.js';
 
 // Texto de lista vacía de cada etapa cerrada.
@@ -11,7 +11,65 @@ const SIN_CERRADOS = {
   perdida: 'Sin planes rechazados.'
 };
 
+// Guarda el formulario nuevoPlan sin tocar los de otras vistas.
+function guardarNuevoPlan(valores, errores) {
+  cambiar({ formularios: { ...estado.formularios, nuevoPlan: { valores, errores } } });
+}
+
+// Quita el formulario nuevoPlan sin tocar los de otras vistas.
+function borrarNuevoPlan() {
+  const resto = { ...estado.formularios };
+  delete resto.nuevoPlan;
+  cambiar({ formularios: resto });
+}
+
 // ---------- Partes de la pantalla ----------
+
+function nuevoPlanHtml(estado, clientes) {
+  if (clientes.length === 0) {
+    return `<div class="card mb-4">
+      <div class="card-body">
+        <h2 class="h5 card-title">Nuevo plan</h2>
+        <p class="mb-0">Primero agregue pacientes a su cartera. <a href="#/cartera">Ir a mi cartera</a></p>
+      </div>
+    </div>`;
+  }
+  const form = estado.formularios.nuevoPlan || {};
+  const valores = form.valores || {};
+  const errores = form.errores || {};
+  const elegido = String(valores.cliente_id ?? '');
+  const opciones = clientes.map((c) => {
+    const seleccionada = String(c.id) === elegido ? ' selected' : '';
+    return `<option value="${escapar(c.id)}"${seleccionada}>${escapar(c.nombre)}</option>`;
+  }).join('');
+  // novalidate y sin required: los mensajes de error los da el servidor.
+  return `<div class="card mb-4">
+    <div class="card-body">
+      <h2 class="h5 card-title">Nuevo plan</h2>
+      <form data-form="nuevoPlan" novalidate>
+        <div class="row g-2 align-items-start">
+          <div class="col-12 col-md-5">
+            <label for="nuevo-cliente" class="form-label">Paciente</label>
+            <select id="nuevo-cliente" name="cliente_id" class="form-select texto-largo${claseError(errores, 'cliente_id')}">
+              <option value="">Elija un paciente</option>
+              ${opciones}
+            </select>
+            ${errorCampo(errores, 'cliente_id')}
+          </div>
+          <div class="col-12 col-md-5">
+            <label for="nuevo-titulo" class="form-label">Título del plan</label>
+            <input type="text" id="nuevo-titulo" name="titulo" class="form-control${claseError(errores, 'titulo')}"
+                   value="${escapar(valores.titulo)}" autocomplete="off">
+            ${errorCampo(errores, 'titulo')}
+          </div>
+          <div class="col-12 col-md-2 d-grid align-self-md-end">
+            <button type="submit" class="btn btn-primary">Crear plan</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>`;
+}
 
 // Planes de una etapa, en el orden en que los devuelve la API (de la más reciente a la más antigua).
 function deEtapa(oportunidades, etapa) {
@@ -102,11 +160,39 @@ export default {
     if (!embudo) return '';
 
     return `<h1 class="h4 mb-3">Planes de tratamiento</h1>
+      ${nuevoPlanHtml(estado, embudo.clientes)}
       ${abiertosHtml(embudo.oportunidades)}
       ${cerradosHtml(embudo.oportunidades)}`;
   },
 
   acciones: {},
 
-  formularios: {}
+  formularios: {
+    async nuevoPlan(datos) {
+      const valores = { cliente_id: datos.cliente_id || '', titulo: datos.titulo ?? '' };
+      // Se guarda lo escrito ANTES de pedir: cada cambio de estado vuelve a dibujar.
+      guardarNuevoPlan(valores, {});
+
+      let plan;
+      try {
+        // La API solo acepta cliente_id como entero JSON; sin paciente viaja null (422).
+        // El título va tal cual, sin recortar: lo valida la API.
+        plan = await pedir('POST', '/oportunidades', {
+          cliente_id: valores.cliente_id === '' ? null : Number(valores.cliente_id),
+          titulo: valores.titulo
+        });
+      } catch (e) {
+        if (e.status === 422) {
+          guardarNuevoPlan(valores, e.errores);
+        } else {
+          mostrarError(e); // API apagada, 500 o sesión terminada; lo escrito sigue guardado
+        }
+        return;
+      }
+
+      // 201: formulario vacío y al detalle del plan nuevo.
+      borrarNuevoPlan();
+      location.hash = '#/plan/' + plan.id;
+    }
+  }
 };
