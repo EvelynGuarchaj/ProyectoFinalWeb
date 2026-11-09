@@ -9,11 +9,14 @@ import { conflicto, invalido, noEncontrado, peticionMala } from '../util/errores
 import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
 import { ABIERTAS, CERRADAS, ETAPAS, transicionPermitida } from '../util/etapas.js';
 import * as formato from '../util/formato.js';
-import { verificarEvaluacion } from '../util/reglaPropia.js';
+import { MENSAJE_EVALUACION, pacienteTieneEvaluacion, verificarEvaluacion } from '../util/reglaPropia.js';
 
 // Etapas que exigen la cita de evaluación si el plan tiene un tratamiento que la requiere
 // (sección 2.3). `perdida` no está: un plan se puede rechazar siempre (R-P7).
 const ETAPAS_CON_EVALUACION = Object.freeze(['propuesta', 'negociacion', 'ganada']);
+// Etapas en las que agregar un tratamiento que requiere evaluación exige la cita.
+// En prospecto y calificado se agrega sin cita; ganada y perdida ya dan 409 por cerrado.
+const ETAPAS_AGREGAR_CON_EVALUACION = Object.freeze(['propuesta', 'negociacion']);
 
 const MENSAJES = {
   filtroEtapa: 'El filtro etapa no es válido.',
@@ -157,7 +160,7 @@ const SQL_CERRAR = `
    WHERE id = ?`;
 
 // Tratamientos del plan.
-const SQL_PRODUCTO_ACTIVO = 'SELECT id FROM productos WHERE id = ? AND activo = 1 LIMIT 1';
+const SQL_PRODUCTO_ACTIVO = 'SELECT id, requiere_evaluacion FROM productos WHERE id = ? AND activo = 1 LIMIT 1';
 
 const SQL_LINEA_REPETIDA =
   'SELECT id FROM oportunidad_productos WHERE oportunidad_id = ? AND producto_id = ? LIMIT 1';
@@ -371,16 +374,19 @@ rutasOportunidades.post('/:id/productos', async (req, res) => {
   let detalle;
   try {
     detalle = await transaccion(async (cx) => {
-      await bloquearPlanAbierto(cx, id, vendedorId);
+      const plan = await bloquearPlanAbierto(cx, id, vendedorId);
 
       // Todos los errores juntos en un solo 422.
       const errores = {};
       const productoId = cuerpo.producto_id;
+      let requiereEvaluacion = false;
       if (!esEnteroPositivo(productoId)) {
         errores.producto_id = MENSAJES.productoId;
       } else {
         const [activos] = await cx.execute(SQL_PRODUCTO_ACTIVO, [productoId]);
         if (activos.length === 0) errores.producto_id = MENSAJES.productoId;
+        // MySQL lo entrega como 0 o 1.
+        else requiereEvaluacion = Boolean(activos[0].requiere_evaluacion);
       }
       const cantidad = cuerpo.cantidad;
       if (!esCantidadValida(cantidad)) errores.cantidad = MENSAJES.cantidad;
@@ -389,7 +395,14 @@ rutasOportunidades.post('/:id/productos', async (req, res) => {
       const [repetidas] = await cx.execute(SQL_LINEA_REPETIDA, [id, productoId]);
       if (repetidas.length > 0) throw conflicto(MENSAJES.repetido);
 
-      // Regla propia (spec 13): si el producto requiere evaluación y el plan está en propuesta o negociacion, revisar la sección 2.3 → 409.
+      // Regla propia (sección 2.3 de la especificación).
+      if (
+        requiereEvaluacion &&
+        ETAPAS_AGREGAR_CON_EVALUACION.includes(plan.etapa) &&
+        !(await pacienteTieneEvaluacion(cx, plan.cliente_id))
+      ) {
+        throw conflicto(MENSAJE_EVALUACION);
+      }
 
       const [resultado] = await cx.execute(SQL_INSERTAR_LINEA, [id, cantidad, productoId]);
       // El producto se desactivó entre la validación y el INSERT: no se insertó nada.
