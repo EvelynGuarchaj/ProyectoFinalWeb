@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "CRM Dientecitos Felices · API del asesor",
-    "description": "Pruebas de la API (spec 02 en adelante). Antes de ejecutar: `php artisan migrate:fresh --seeder=VerificacionSeeder`, `npm run dev` en api/, y llenar las variables correo_valeria, correo_sergio, correo_ivan y clave con los datos de VerificacionSeeder. Ejecute la carpeta en orden: unas peticiones usan variables que guardan otras.",
+    "description": "Pruebas de la API (spec 02 en adelante). Antes de ejecutar: `php artisan migrate:fresh --seeder=VerificacionSeeder`, `npm run dev` en api/, y llenar las variables correo_valeria, correo_sergio, correo_ivan, correo_diego, correo_carlos y clave con los datos de VerificacionSeeder. Ejecute la carpeta en orden: unas peticiones usan variables que guardan otras.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -404,6 +404,924 @@
           }
         }
       ]
+    },
+    {
+      "name": "Clientes",
+      "description": "A3, S3, S5 y S8 (spec 06). Cambia datos (crea y toma pacientes): ejecútela completa y en orden, justo después de `php artisan migrate:fresh --seeder=VerificacionSeeder`. Si se ejecuta dos veces sin recargar la semilla, falla. Necesita las variables correo_diego, correo_valeria, correo_carlos y clave.",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const internasClientes = ['password', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+              "pm.test('Sin llaves internas (password, vendedor_id, user_id, supervisor_id, usuario_id)', () => {",
+              "  const texto = pm.response.text();",
+              "  internasClientes.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+              "});"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "1. Login de Diego → 200 (guarda idDiego)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_diego está llena', () => pm.expect(pm.collectionVariables.get('correo_diego'), 'Llene correo_diego').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.collectionVariables.set('token_diego', cuerpo.token);",
+                  "pm.collectionVariables.set('idDiego', cuerpo.usuario.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_diego}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "1b. GET /clientes de Diego → guarda idAjeno (Farmacia Los Altos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const farmacia = pm.response.json().find((c) => c.nombre === 'Farmacia Los Altos');",
+                  "pm.test('Diego tiene a Farmacia Los Altos', () => pm.expect(farmacia).to.be.an('object'));",
+                  "pm.collectionVariables.set('idAjeno', farmacia.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_diego}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "2. Login de Valeria → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_valeria está llena', () => pm.expect(pm.collectionVariables.get('correo_valeria'), 'Llene correo_valeria').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.collectionVariables.set('token_valeria', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_valeria}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2b. GET /clientes de Valeria → 3, María Coyoy con CF",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('Trae sus 3 pacientes ordenados por nombre', () => {",
+                  "  pm.expect(lista.map((c) => c.nombre)).to.eql(['Comercial El Quetzal', 'Ferretería Xela', 'María Coyoy']);",
+                  "});",
+                  "pm.test('Cada uno tiene exactamente id, nombre, nit, telefono y correo', () => {",
+                  "  lista.forEach((c) => pm.expect(Object.keys(c).sort()).to.eql(['correo', 'id', 'nit', 'nombre', 'telefono']));",
+                  "});",
+                  "pm.test('María Coyoy trae \"nit\": \"CF\"', () => {",
+                  "  pm.expect(lista.find((c) => c.nombre === 'María Coyoy').nit).to.eql('CF');",
+                  "});",
+                  "const quetzal = lista.find((c) => c.nombre === 'Comercial El Quetzal');",
+                  "pm.collectionVariables.set('idQuetzal', quetzal.id);",
+                  "pm.collectionVariables.set('telQuetzal', quetzal.telefono);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "3. GET /clientes?q=4521-8 → Comercial El Quetzal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Trae Comercial El Quetzal', () => {",
+                  "  pm.expect(pm.response.json().map((c) => c.nombre)).to.include('Comercial El Quetzal');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes?q=4521-8"
+          }
+        },
+        {
+          "name": "3b. GET /clientes?q=quetzal → Comercial El Quetzal",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Trae Comercial El Quetzal', () => {",
+                  "  pm.expect(pm.response.json().map((c) => c.nombre)).to.include('Comercial El Quetzal');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes?q=quetzal"
+          }
+        },
+        {
+          "name": "3c. GET /clientes?q=Farmacia → [] (es de Diego)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Lista vacía', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes?q=Farmacia"
+          }
+        },
+        {
+          "name": "4. GET /clientes?q=' OR '1'='1 → 200 []",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200 (no 500)', () => pm.response.to.have.status(200));",
+                  "pm.test('Lista vacía', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes?q=%27%20OR%20%271%27%3D%271"
+          }
+        },
+        {
+          "name": "5. GET /clientes/{{idAjeno}} → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo: { error: \"No se encontró el recurso.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idAjeno}}"
+          }
+        },
+        {
+          "name": "5b. PATCH /clientes/{{idAjeno}} → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo: { error: \"No se encontró el recurso.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idAjeno}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Cambiado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "6. GET /clientes/abc → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo: { error: \"No se encontró el recurso.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/abc"
+          }
+        },
+        {
+          "name": "7. POST /clientes con NIT 452 1817-k → 409 NIT",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo: { error: \"Ya existe un paciente con ese NIT.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'Ya existe un paciente con ese NIT.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Paciente con NIT repetido\",\n  \"nit\": \"452 1817-k\",\n  \"telefono\": \"3999-0607\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "8. POST /clientes con teléfono 1234-5678 → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo: { errores: { telefono: \"Escriba un teléfono de Guatemala de 8 dígitos.\" } }', () => pm.expect(pm.response.json()).to.eql({ errores: { telefono: 'Escriba un teléfono de Guatemala de 8 dígitos.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Paciente con teléfono inválido\",\n  \"nit\": \"CF\",\n  \"telefono\": \"1234-5678\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "9. POST /clientes con nombre, NIT y correo inválidos → 422",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Cuerpo: { errores: { nombre: \"Escriba el nombre del paciente (máximo 150 caracteres).\", nit: \"Escriba un NIT válido (con su dígito verificador) o CF.\", correo: \"Escriba un correo válido.\" } }', () => pm.expect(pm.response.json()).to.eql({ errores: { nombre: 'Escriba el nombre del paciente (máximo 150 caracteres).', nit: 'Escriba un NIT válido (con su dígito verificador) o CF.', correo: 'Escriba un correo válido.' } }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"\",\n  \"nit\": \"4521817-1\",\n  \"telefono\": \"3999-0609\",\n  \"correo\": \"x@\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10. POST /clientes válido con vendedor_id de Diego → 201 (se ignora)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const cliente = pm.response.json();",
+                  "pm.test('Forma Cliente: exactamente id, nombre, nit, telefono y correo', () => {",
+                  "  pm.expect(Object.keys(cliente).sort()).to.eql(['correo', 'id', 'nit', 'nombre', 'telefono']);",
+                  "});",
+                  "pm.test('Datos guardados y normalizados', () => {",
+                  "  pm.expect(cliente).to.include({ nombre: 'Paciente de Postman', nit: 'CF', telefono: '39990610', correo: 'postman@paciente.test' });",
+                  "});",
+                  "pm.collectionVariables.set('idNuevo', cliente.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nombre\": \"Paciente de Postman\",\n  \"nit\": \"CF\",\n  \"telefono\": \"3999-0610\",\n  \"correo\": \"postman@paciente.test\",\n  \"vendedor_id\": {{idDiego}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10b. GET /clientes → 4, incluido el nuevo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('Trae 4 pacientes', () => pm.expect(lista).to.have.lengthOf(4));",
+                  "pm.test('Incluye al paciente nuevo (quedó en la cartera de Valeria)', () => {",
+                  "  pm.expect(lista.map((c) => c.id)).to.include(Number(pm.collectionVariables.get('idNuevo')));",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "11. PATCH /clientes/{{idNuevo}} con {} → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Cuerpo: { error: \"No envió ningún campo para cambiar.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No envió ningún campo para cambiar.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idNuevo}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11b. PATCH /clientes/{{idNuevo}} con correo \"\" → 200 y correo null",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cliente = pm.response.json();",
+                  "pm.test('Forma Cliente: exactamente id, nombre, nit, telefono y correo', () => {",
+                  "  pm.expect(Object.keys(cliente).sort()).to.eql(['correo', 'id', 'nit', 'nombre', 'telefono']);",
+                  "});",
+                  "pm.test('correo es null', () => pm.expect(cliente.correo).to.be.null);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idNuevo}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11c. PATCH /clientes/{{idNuevo}} con el teléfono de Comercial El Quetzal → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo: { error: \"Ya existe un paciente con ese teléfono.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'Ya existe un paciente con ese teléfono.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idNuevo}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"telefono\": \"{{telQuetzal}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "12. GET /clientes/disponibles → solo id y nombre",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const lista = pm.response.json();",
+                  "pm.test('Cada elemento trae exactamente id y nombre', () => {",
+                  "  pm.expect(lista).to.not.be.empty;",
+                  "  lista.forEach((c) => pm.expect(Object.keys(c).sort()).to.eql(['id', 'nombre']));",
+                  "});",
+                  "pm.test('Ordenados por nombre', () => {",
+                  "  const nombres = lista.map((c) => c.nombre);",
+                  "  pm.expect(nombres).to.eql([...nombres].sort((a, b) => a.localeCompare(b, 'es', { sensitivity: 'base' })));",
+                  "});",
+                  "const buscar = (nombre) => lista.find((c) => c.nombre === nombre);",
+                  "pm.test('Están Agencia Cuatro Caminos, Café Zunil y Clínica San Rafael', () => {",
+                  "  ['Agencia Cuatro Caminos', 'Café Zunil', 'Clínica San Rafael'].forEach((n) => pm.expect(buscar(n), n).to.be.an('object'));",
+                  "});",
+                  "pm.collectionVariables.set('idDisponible', buscar('Agencia Cuatro Caminos').id);",
+                  "pm.collectionVariables.set('idDisponible2', buscar('Café Zunil').id);",
+                  "pm.collectionVariables.set('idDisponible3', buscar('Clínica San Rafael').id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/disponibles"
+          }
+        },
+        {
+          "name": "13. POST /clientes/{{idDisponible}}/tomar → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cliente = pm.response.json();",
+                  "pm.test('Forma Cliente: exactamente id, nombre, nit, telefono y correo', () => {",
+                  "  pm.expect(Object.keys(cliente).sort()).to.eql(['correo', 'id', 'nit', 'nombre', 'telefono']);",
+                  "});",
+                  "pm.test('Es Agencia Cuatro Caminos', () => {",
+                  "  pm.expect(cliente.id).to.eql(Number(pm.collectionVariables.get('idDisponible')));",
+                  "  pm.expect(cliente.nombre).to.eql('Agencia Cuatro Caminos');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idDisponible}}/tomar"
+          }
+        },
+        {
+          "name": "13b. Tomar otra vez el mismo → 409 no disponible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo: { error: \"Este paciente ya no está disponible.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'Este paciente ya no está disponible.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idDisponible}}/tomar"
+          }
+        },
+        {
+          "name": "13c. Tomar el 999999 → 404",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo: { error: \"No se encontró el recurso.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/999999/tomar"
+          }
+        },
+        {
+          "name": "13d. Tomar un paciente propio (Comercial El Quetzal) → 409 no disponible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo: { error: \"Este paciente ya no está disponible.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'Este paciente ya no está disponible.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_valeria}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idQuetzal}}/tomar"
+          }
+        },
+        {
+          "name": "14. Login de Carlos → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_carlos está llena', () => pm.expect(pm.collectionVariables.get('correo_carlos'), 'Llene correo_carlos').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cuerpo = pm.response.json();",
+                  "pm.collectionVariables.set('token_carlos', cuerpo.token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_carlos}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14b. Carlos toma Café Zunil → 200 (llega a 10)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const cliente = pm.response.json();",
+                  "pm.test('Forma Cliente: exactamente id, nombre, nit, telefono y correo', () => {",
+                  "  pm.expect(Object.keys(cliente).sort()).to.eql(['correo', 'id', 'nit', 'nombre', 'telefono']);",
+                  "});",
+                  "pm.test('Es Café Zunil', () => pm.expect(cliente.nombre).to.eql('Café Zunil'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_carlos}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idDisponible2}}/tomar"
+          }
+        },
+        {
+          "name": "14c. Carlos toma Clínica San Rafael → 409 cartera llena",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo: { error: \"Su cartera ya tiene 10 pacientes, el máximo permitido.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'Su cartera ya tiene 10 pacientes, el máximo permitido.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_carlos}}"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idDisponible3}}/tomar"
+          }
+        },
+        {
+          "name": "14d. Carlos con 10 toma el 999999 → 404 (no 409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Cuerpo: { error: \"No se encontró el recurso.\" }', () => pm.expect(pm.response.json()).to.eql({ error: 'No se encontró el recurso.' }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_carlos}}"
+              }
+            ],
+            "url": "{{base}}/clientes/999999/tomar"
+          }
+        }
+      ]
     }
   ],
   "event": [
@@ -448,6 +1366,58 @@
     },
     {
       "key": "token_alterado",
+      "value": ""
+    },
+    {
+      "key": "correo_diego",
+      "value": ""
+    },
+    {
+      "key": "correo_carlos",
+      "value": ""
+    },
+    {
+      "key": "token_diego",
+      "value": ""
+    },
+    {
+      "key": "token_valeria",
+      "value": ""
+    },
+    {
+      "key": "token_carlos",
+      "value": ""
+    },
+    {
+      "key": "idDiego",
+      "value": ""
+    },
+    {
+      "key": "idAjeno",
+      "value": ""
+    },
+    {
+      "key": "idQuetzal",
+      "value": ""
+    },
+    {
+      "key": "telQuetzal",
+      "value": ""
+    },
+    {
+      "key": "idNuevo",
+      "value": ""
+    },
+    {
+      "key": "idDisponible",
+      "value": ""
+    },
+    {
+      "key": "idDisponible2",
+      "value": ""
+    },
+    {
+      "key": "idDisponible3",
       "value": ""
     }
   ]
