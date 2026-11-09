@@ -50,6 +50,47 @@ function encabezadoHtml(plan) {
   </div>`;
 }
 
+// Una línea de tratamiento. Abierto: precio guardado y subtotal (los formularios llegan en el paso 4).
+function lineaHtml(linea, cerrado) {
+  const detalle = cerrado
+    ? `<div class="small">${quetzales(linea.precio_unitario)} × ${escapar(linea.cantidad)} = ${quetzales(linea.subtotal)}</div>`
+    : `<div class="small">Precio guardado: ${quetzales(linea.precio_unitario)}</div>
+       <div class="small">Subtotal: ${quetzales(linea.subtotal)}</div>`;
+  return `<li class="list-group-item">
+    <div class="fw-semibold texto-largo">${escapar(linea.nombre)}</div>
+    ${detalle}
+  </li>`;
+}
+
+function tratamientosHtml(plan) {
+  const cerrado = estaCerrado(plan);
+  const lineas = plan.productos || [];
+  const lista = lineas.length
+    ? `<ul class="list-group list-group-flush">${lineas.map((l) => lineaHtml(l, cerrado)).join('')}</ul>`
+    : '<div class="card-body"><p class="text-muted mb-0">Este plan aún no tiene tratamientos.</p></div>';
+  return `<div class="card mb-3">
+    <div class="card-header"><h2 class="h5 mb-0">Tratamientos</h2></div>
+    ${lista}
+    <div class="card-footer fw-semibold">Total: ${quetzales(plan.total)}</div>
+  </div>`;
+}
+
+function filaHistorialHtml(h) {
+  const anterior = h.etapa_anterior === null ? 'Creado' : ETAPAS[h.etapa_anterior];
+  return `<li class="list-group-item">
+    <div>${escapar(anterior)} → ${escapar(ETAPAS[h.etapa_nueva])}</div>
+    <div class="small text-muted texto-largo">${escapar(h.usuario)} · ${fechaGT(h.fecha)}</div>
+  </li>`;
+}
+
+function historialHtml(plan) {
+  const filas = plan.historial || [];
+  return `<div class="card mb-3">
+    <div class="card-header"><h2 class="h5 mb-0">Historial</h2></div>
+    <ul class="list-group list-group-flush">${filas.map(filaHistorialHtml).join('')}</ul>
+  </div>`;
+}
+
 // ---------- Vista ----------
 
 export default {
@@ -80,7 +121,10 @@ export default {
     if (!datos) return ''; // cargando: el indicador de la base ya se ve
     if (datos.noEncontrado) return noEncontradoHtml();
 
-    return encabezadoHtml(datos.plan);
+    const plan = datos.plan;
+    return `${encabezadoHtml(plan)}
+      ${tratamientosHtml(plan)}
+      ${historialHtml(plan)}`;
   },
 
   acciones: {},
