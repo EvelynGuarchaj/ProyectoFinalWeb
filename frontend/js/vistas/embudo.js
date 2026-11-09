@@ -2,8 +2,14 @@
 // y el formulario para crear un plan. Spec 19. Totales y probabilidades salen de la API tal cual.
 import { estado, cambiar } from '../estado.js';
 import { pedir } from '../api.js';
-import { escapar, quetzales } from '../util.js';
-import { ETAPAS, ABIERTAS } from '../textos.js';
+import { escapar, quetzales, fechaGT } from '../util.js';
+import { ETAPAS, ABIERTAS, CERRADAS } from '../textos.js';
+
+// Texto de lista vacía de cada etapa cerrada.
+const SIN_CERRADOS = {
+  ganada: 'Sin planes aceptados.',
+  perdida: 'Sin planes rechazados.'
+};
 
 // ---------- Partes de la pantalla ----------
 
@@ -43,6 +49,39 @@ function abiertosHtml(oportunidades) {
     </div>`;
 }
 
+function filaCerradaHtml(o) {
+  const motivo = o.etapa === 'perdida'
+    ? `<div class="small texto-largo">Motivo: ${escapar(o.motivo_perdida)}</div>`
+    : '';
+  return `<li class="list-group-item">
+    <a href="#/plan/${escapar(o.id)}" class="fw-semibold d-block texto-largo">${escapar(o.titulo)}</a>
+    <div class="small text-muted texto-largo">${escapar(o.cliente && o.cliente.nombre)}</div>
+    <div class="small">${quetzales(o.total)} · Cerrado el ${fechaGT(o.fecha_cierre)}</div>
+    ${motivo}
+  </li>`;
+}
+
+function columnaCerradaHtml(oportunidades, etapa) {
+  const planes = deEtapa(oportunidades, etapa);
+  const contenido = planes.length
+    ? `<ul class="list-group">${planes.map(filaCerradaHtml).join('')}</ul>`
+    : `<p class="text-muted small">${SIN_CERRADOS[etapa]}</p>`;
+  return `<div class="col-12 col-md-6 columna-embudo">
+    <h3 class="h6 d-flex justify-content-between align-items-center">
+      <span>${escapar(ETAPAS[etapa])}</span>
+      <span class="badge text-bg-secondary">${escapar(planes.length)}</span>
+    </h3>
+    ${contenido}
+  </div>`;
+}
+
+function cerradosHtml(oportunidades) {
+  return `<h2 class="h5 mb-3">Planes cerrados</h2>
+    <div class="row g-3">
+      ${CERRADAS.map((etapa) => columnaCerradaHtml(oportunidades, etapa)).join('')}
+    </div>`;
+}
+
 // ---------- Vista ----------
 
 export default {
@@ -63,7 +102,8 @@ export default {
     if (!embudo) return '';
 
     return `<h1 class="h4 mb-3">Planes de tratamiento</h1>
-      ${abiertosHtml(embudo.oportunidades)}`;
+      ${abiertosHtml(embudo.oportunidades)}
+      ${cerradosHtml(embudo.oportunidades)}`;
   },
 
   acciones: {},
