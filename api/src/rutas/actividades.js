@@ -16,6 +16,7 @@ const MENSAJES = {
   tipo: 'Elija el tipo: llamada, reunion o tarea.',
   descripcion: 'Escriba la descripción (máximo 500 caracteres).',
   venceEn: 'Escriba la fecha en ISO 8601 con zona horaria, por ejemplo 2026-12-01T10:00:00-06:00.',
+  completada: 'Indique true o false.',
 };
 
 // Los tres valores del ENUM de `actividades.tipo`. Se comparan exactos: sin recortar ni minúsculas.
@@ -38,6 +39,12 @@ const SQL_INSERTAR = `
   SELECT c.id, ?, ?, ?, ?, 0, NOW(), NOW()
     FROM clientes c
    WHERE c.id = ? AND c.vendedor_id = ?`;
+
+// Cambia solo `completada`, y solo si el paciente de la actividad es de la cartera del asesor.
+const SQL_MARCAR = `
+  UPDATE actividades a JOIN clientes c ON c.id = a.cliente_id
+     SET a.completada = ?, a.updated_at = NOW()
+   WHERE a.id = ? AND c.vendedor_id = ?`;
 
 // Devuelve la fila de la actividad o `undefined` si no existe o es ajena.
 async function leerUna(id, vendedorId) {
@@ -110,6 +117,29 @@ rutasActividades.get('/', async (req, res) => {
   const filas = await consulta(sql, [req.usuario.id]);
   const ahora = new Date(); // un solo reloj para toda la respuesta
   res.json(filas.map((fila) => formato.actividad(fila, ahora)));
+});
+
+// PATCH /api/actividades/:id  { "completada": true | false }
+// El contrato solo permite cambiar `completada`; cualquier otro campo del cuerpo se ignora.
+rutasActividades.patch('/:id', async (req, res) => {
+  const id = idDeRuta(req.params.id);
+  const cuerpo = exigirCuerpo(req);
+  const vendedorId = req.usuario.id;
+
+  // Lo ajeno responde 404 antes de validar.
+  if (!(await leerUna(id, vendedorId))) throw noEncontrado();
+
+  // Solo un booleano de JSON: "si", 1, "true", null o la clave ausente → 422.
+  const completada = cuerpo.completada;
+  if (typeof completada !== 'boolean') throw invalido({ completada: MENSAJES.completada });
+
+  // mysql2 usa FOUND_ROWS: marcar igual que ya estaba cuenta 1 fila. 0 = ya no es suya.
+  const resultado = await consulta(SQL_MARCAR, [completada ? 1 : 0, id, vendedorId]);
+  if (resultado.affectedRows === 0) throw noEncontrado();
+
+  const fila = await leerUna(id, vendedorId);
+  if (!fila) throw noEncontrado();
+  res.json(formato.actividad(fila));
 });
 
 // Montado también en /api/clientes, después de rutasClientes (que no tiene esta ruta).
