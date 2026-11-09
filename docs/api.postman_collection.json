@@ -3702,6 +3702,1626 @@
           }
         }
       ]
+    },
+    {
+      "name": "Regla propia",
+      "description": "R-P1 a R-P7 y la cita de otro asesor (sección 2 de la especificación, spec 13). Necesita la semilla del sector: ejecútela completa y en orden, justo después de `php artisan migrate:fresh --seed`. Cambia datos (crea planes y citas, cierra un plan como ganada y otro como perdida, completa la cita de Sofía y avanza el plan de Héctor): si se ejecuta dos veces sin recargar la semilla, falla. Ningún id es fijo: los guardan los scripts. Necesita las variables correo_andrea, correo_kevin y clave.",
+      "item": [
+        {
+          "name": "1. Login de Andrea → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_andrea está llena', () => pm.expect(pm.collectionVariables.get('correo_andrea'), 'Llene correo_andrea').to.not.be.empty);",
+                  "pm.test('La variable clave está llena', () => pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_andrea', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_andrea}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "2. GET /productos → guarda idOrtodoncia, idImplante e idLimpieza",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const productos = pm.response.json();",
+                  "const buscar = (nombre) => productos.find((p) => p.nombre === nombre);",
+                  "const ortodoncia = buscar('Ortodoncia con brackets');",
+                  "const implante = buscar('Implante dental');",
+                  "const limpieza = buscar('Limpieza dental');",
+                  "pm.test('El catálogo tiene los tres tratamientos', () => {",
+                  "  pm.expect(ortodoncia, 'Ortodoncia con brackets').to.be.an('object');",
+                  "  pm.expect(implante, 'Implante dental').to.be.an('object');",
+                  "  pm.expect(limpieza, 'Limpieza dental').to.be.an('object');",
+                  "});",
+                  "pm.test('Ortodoncia e implante requieren evaluación; limpieza no', () => {",
+                  "  pm.expect(ortodoncia.requiere_evaluacion).to.equal(true);",
+                  "  pm.expect(implante.requiere_evaluacion).to.equal(true);",
+                  "  pm.expect(limpieza.requiere_evaluacion).to.equal(false);",
+                  "});",
+                  "pm.collectionVariables.set('idOrtodoncia', ortodoncia.id);",
+                  "pm.collectionVariables.set('idImplante', implante.id);",
+                  "pm.collectionVariables.set('idLimpieza', limpieza.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/productos"
+          }
+        },
+        {
+          "name": "3. GET /oportunidades → guarda idPlanSofia e idSofia (Ortodoncia completa)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json().find((o) => o.titulo === 'Ortodoncia completa' && o.cliente.nombre === 'Sofía Ramírez');",
+                  "pm.test('Andrea tiene Ortodoncia completa de Sofía Ramírez', () => pm.expect(plan).to.be.an('object'));",
+                  "pm.test('Está en calificado', () => pm.expect(plan.etapa).to.equal('calificado'));",
+                  "pm.collectionVariables.set('idPlanSofia', plan.id);",
+                  "pm.collectionVariables.set('idSofia', plan.cliente.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades"
+          }
+        },
+        {
+          "name": "4. GET /oportunidades/{{idPlanSofia}} → guarda historialSofia",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Tiene la línea Ortodoncia con brackets', () => pm.expect(plan.productos.some((l) => l.nombre === 'Ortodoncia con brackets')).to.equal(true));",
+                  "pm.collectionVariables.set('historialSofia', plan.historial.length);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanSofia}}"
+          }
+        },
+        {
+          "name": "5. GET /actividades → guarda idCitaSofia y clientesConCita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const actividades = pm.response.json();",
+                  "const idSofia = Number(pm.collectionVariables.get('idSofia'));",
+                  "const cita = actividades.find((a) => a.cliente.id === idSofia && a.descripcion === 'Cita de evaluación de ortodoncia');",
+                  "pm.test('Sofía tiene la Cita de evaluación de ortodoncia, reunion y pendiente', () => {",
+                  "  pm.expect(cita).to.be.an('object');",
+                  "  pm.expect(cita.tipo).to.equal('reunion');",
+                  "  pm.expect(cita.completada).to.equal(false);",
+                  "});",
+                  "const conCita = [...new Set(actividades.filter((a) => a.tipo === 'reunion' && a.completada).map((a) => a.cliente.id))];",
+                  "pm.test('Sofía no tiene ninguna reunion completada', () => pm.expect(conCita).to.not.include(idSofia));",
+                  "pm.collectionVariables.set('idCitaSofia', cita.id);",
+                  "pm.collectionVariables.set('clientesConCita', JSON.stringify(conCita));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/actividades"
+          }
+        },
+        {
+          "name": "6. GET /clientes → guarda idPacienteSinCita",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const idSofia = Number(pm.collectionVariables.get('idSofia'));",
+                  "const conCita = JSON.parse(pm.collectionVariables.get('clientesConCita') || '[]');",
+                  "const paciente = pm.response.json().find((c) => c.id !== idSofia && !conCita.includes(c.id));",
+                  "pm.test('Andrea tiene otro paciente, distinto de Sofía, sin reunion completada (semilla del sector)', () => pm.expect(paciente).to.be.an('object'));",
+                  "pm.collectionVariables.set('idPacienteSinCita', paciente.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/clientes"
+          }
+        },
+        {
+          "name": "7. R-P1 · PATCH /oportunidades/{{idPlanSofia}}/etapa a propuesta sin cita → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto de la regla propia', () => pm.expect(pm.response.json()).to.eql({ error: \"El paciente necesita una cita de evaluación completada antes de recibir el presupuesto.\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanSofia}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "8. R-P1 · GET /oportunidades/{{idPlanSofia}} → sigue en calificado, historial igual",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Sigue en calificado', () => pm.expect(plan.etapa).to.equal('calificado'));",
+                  "pm.test('El historial no cambió', () => pm.expect(plan.historial.length).to.equal(Number(pm.collectionVariables.get('historialSofia'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanSofia}}"
+          }
+        },
+        {
+          "name": "9. R-P3 · POST /oportunidades Ortodoncia sin cita → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('El plan queda en prospecto', () => pm.expect(pm.response.json().etapa).to.equal('prospecto'));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idPlanCitaPendiente', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idPacienteSinCita}},\n  \"titulo\": \"Ortodoncia sin cita (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "10. R-P3 · POST …/productos ortodoncia en prospecto → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanCitaPendiente}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idOrtodoncia}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "11. R-P3 · PATCH …/etapa a calificado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en calificado', () => pm.expect(pm.response.json().etapa).to.equal('calificado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanCitaPendiente}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"calificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "12. R-P3 · POST /clientes/{{idPacienteSinCita}}/actividades reunion pendiente → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Queda pendiente', () => pm.expect(pm.response.json().completada).to.equal(false));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idCitaPendiente', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idPacienteSinCita}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"reunion\",\n  \"descripcion\": \"Cita de evaluación (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "13a. R-P3 · POST /clientes/{{idPacienteSinCita}}/actividades llamada → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idLlamada', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/clientes/{{idPacienteSinCita}}/actividades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tipo\": \"llamada\",\n  \"descripcion\": \"Llamada de seguimiento (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "13b. R-P3 · PATCH /actividades/{{idLlamada}} completada → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('completada es true', () => pm.expect(pm.response.json().completada).to.equal(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idLlamada}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "14. R-P3 · PATCH …/etapa a propuesta con cita pendiente → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto de la regla propia', () => pm.expect(pm.response.json()).to.eql({ error: \"El paciente necesita una cita de evaluación completada antes de recibir el presupuesto.\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanCitaPendiente}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "15. R-P3 · GET /oportunidades/{{idPlanCitaPendiente}} → sigue en calificado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en calificado', () => pm.expect(pm.response.json().etapa).to.equal('calificado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanCitaPendiente}}"
+          }
+        },
+        {
+          "name": "16. R-P7 · PATCH …/etapa a perdida sin cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en perdida', () => pm.expect(pm.response.json().etapa).to.equal('perdida'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanCitaPendiente}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"perdida\",\n  \"motivo_perdida\": \"Prefiere otra clínica\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "17. R-P5 · POST /oportunidades Limpieza → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('El plan queda en prospecto', () => pm.expect(pm.response.json().etapa).to.equal('prospecto'));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idPlanLimpieza', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idPacienteSinCita}},\n  \"titulo\": \"Limpieza (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "18. R-P5 · POST …/productos limpieza → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanLimpieza}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idLimpieza}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "19a. R-P5 · PATCH …/etapa a calificado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en calificado', () => pm.expect(pm.response.json().etapa).to.equal('calificado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanLimpieza}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"calificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "19b. R-P5 · PATCH …/etapa a propuesta sin cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en propuesta', () => pm.expect(pm.response.json().etapa).to.equal('propuesta'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanLimpieza}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "19c. R-P5 · PATCH …/etapa a negociacion sin cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en negociacion', () => pm.expect(pm.response.json().etapa).to.equal('negociacion'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanLimpieza}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"negociacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "19d. R-P5 · PATCH …/etapa a ganada sin cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en ganada', () => pm.expect(pm.response.json().etapa).to.equal('ganada'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanLimpieza}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"ganada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "20. R-P4 · POST /oportunidades Limpieza e implante → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('El plan queda en prospecto', () => pm.expect(pm.response.json().etapa).to.equal('prospecto'));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idPlanImplanteTarde', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idPacienteSinCita}},\n  \"titulo\": \"Limpieza e implante (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "21. R-P4 · POST …/productos limpieza → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idLimpieza}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "22a. R-P4 · PATCH …/etapa a calificado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en calificado', () => pm.expect(pm.response.json().etapa).to.equal('calificado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"calificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "22b. R-P4 · PATCH …/etapa a propuesta → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en propuesta', () => pm.expect(pm.response.json().etapa).to.equal('propuesta'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "22c. R-P4 · PATCH …/etapa a negociacion → 200, guarda totalAntes",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en negociacion', () => pm.expect(pm.response.json().etapa).to.equal('negociacion'));",
+                  "pm.collectionVariables.set('totalAntes', pm.response.json().total);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"negociacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "23. R-P4 · POST …/productos implante en negociacion sin cita → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto de la regla propia', () => pm.expect(pm.response.json()).to.eql({ error: \"El paciente necesita una cita de evaluación completada antes de recibir el presupuesto.\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idImplante}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "24. R-P4 · GET /oportunidades/{{idPlanImplanteTarde}} → 1 línea y el mismo total",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json();",
+                  "pm.test('Conserva 1 línea', () => pm.expect(plan.productos).to.have.length(1));",
+                  "pm.test('El total no cambió', () => pm.expect(plan.total).to.equal(Number(pm.collectionVariables.get('totalAntes'))));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplanteTarde}}"
+          }
+        },
+        {
+          "name": "25. R-P6 · POST /oportunidades Implante → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));",
+                  "pm.test('El plan queda en prospecto', () => pm.expect(pm.response.json().etapa).to.equal('prospecto'));",
+                  "const creado = pm.response.json();",
+                  "pm.collectionVariables.set('idPlanImplante', creado.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cliente_id\": {{idPacienteSinCita}},\n  \"titulo\": \"Implante (Postman)\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "26. R-P6 · POST …/productos implante en prospecto → 201",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 201', () => pm.response.to.have.status(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}/productos",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"producto_id\": {{idImplante}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "27. R-P6 · PATCH …/etapa a calificado → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en calificado', () => pm.expect(pm.response.json().etapa).to.equal('calificado'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"calificado\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "28. R-P6 · PATCH /actividades/{{idCitaPendiente}} completada → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('completada es true', () => pm.expect(pm.response.json().completada).to.equal(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idCitaPendiente}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "29a. R-P6 · PATCH …/etapa a propuesta con cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en propuesta', () => pm.expect(pm.response.json().etapa).to.equal('propuesta'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "29b. R-P6 · PATCH …/etapa a negociacion con cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en negociacion', () => pm.expect(pm.response.json().etapa).to.equal('negociacion'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"negociacion\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "30. R-P6 · PATCH /actividades/{{idCitaPendiente}} vuelve a pendiente → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('completada es false', () => pm.expect(pm.response.json().completada).to.equal(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idCitaPendiente}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "31. R-P6 · PATCH …/etapa a ganada sin cita → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Cuerpo exacto de la regla propia', () => pm.expect(pm.response.json()).to.eql({ error: \"El paciente necesita una cita de evaluación completada antes de recibir el presupuesto.\" }));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"ganada\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "32. R-P6 · GET /oportunidades/{{idPlanImplante}} → sigue en negociacion, sin fecha_cierre",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en negociacion', () => pm.expect(pm.response.json().etapa).to.equal('negociacion'));",
+                  "pm.test('fecha_cierre es null', () => pm.expect(pm.response.json().fecha_cierre).to.equal(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanImplante}}"
+          }
+        },
+        {
+          "name": "33. R-P2 · PATCH /actividades/{{idCitaSofia}} completada → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('completada es true', () => pm.expect(pm.response.json().completada).to.equal(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/actividades/{{idCitaSofia}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"completada\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "34. R-P2 · PATCH /oportunidades/{{idPlanSofia}}/etapa a propuesta con cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en propuesta', () => pm.expect(pm.response.json().etapa).to.equal('propuesta'));",
+                  "const historial = pm.response.json().historial;",
+                  "pm.test('Un registro nuevo de historial', () => pm.expect(historial.length).to.equal(Number(pm.collectionVariables.get('historialSofia')) + 1));",
+                  "pm.test('El último va de calificado a propuesta', () => {",
+                  "  const ultimo = historial[historial.length - 1];",
+                  "  pm.expect(ultimo.etapa_anterior).to.equal('calificado');",
+                  "  pm.expect(ultimo.etapa_nueva).to.equal('propuesta');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_andrea}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanSofia}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "35. Login de Kevin → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('La variable correo_kevin está llena', () => pm.expect(pm.collectionVariables.get('correo_kevin'), 'Llene correo_kevin').to.not.be.empty);",
+                  "pm.test('La variable clave está llena', () => pm.expect(pm.collectionVariables.get('clave'), 'Llene clave').to.not.be.empty);",
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('token_kevin', pm.response.json().token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"correo\": \"{{correo_kevin}}\",\n  \"clave\": \"{{clave}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "36. GET /oportunidades de Kevin → guarda idPlanHector (Implante dental)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "const plan = pm.response.json().find((o) => o.titulo === 'Implante dental' && o.cliente.nombre === 'Héctor Sapón');",
+                  "pm.test('Kevin tiene Implante dental de Héctor Sapón', () => pm.expect(plan).to.be.an('object'));",
+                  "pm.test('Está en calificado', () => pm.expect(plan.etapa).to.equal('calificado'));",
+                  "pm.collectionVariables.set('idPlanHector', plan.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kevin}}"
+              }
+            ],
+            "url": "{{base}}/oportunidades"
+          }
+        },
+        {
+          "name": "37. PATCH /oportunidades/{{idPlanHector}}/etapa a propuesta con cita → 200",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Responde 200', () => pm.response.to.have.status(200));",
+                  "pm.test('El plan queda en propuesta', () => pm.expect(pm.response.json().etapa).to.equal('propuesta'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token_kevin}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base}}/oportunidades/{{idPlanHector}}/etapa",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"etapa\": \"propuesta\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ],
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const internasRegla = ['password', 'vendedor_id', 'user_id', 'supervisor_id', 'usuario_id'];",
+              "pm.test('Sin llaves internas (password, vendedor_id, user_id, supervisor_id, usuario_id)', () => {",
+              "  const texto = pm.response.text();",
+              "  internasRegla.forEach((llave) => pm.expect(texto).to.not.include('\"' + llave + '\"'));",
+              "});"
+            ]
+          }
+        }
+      ]
     }
   ],
   "event": [
@@ -3853,6 +5473,90 @@
     },
     {
       "key": "idLineaNueva",
+      "value": ""
+    },
+    {
+      "key": "correo_andrea",
+      "value": "andrea@dental.test"
+    },
+    {
+      "key": "correo_kevin",
+      "value": "kevin@dental.test"
+    },
+    {
+      "key": "token_andrea",
+      "value": ""
+    },
+    {
+      "key": "token_kevin",
+      "value": ""
+    },
+    {
+      "key": "idOrtodoncia",
+      "value": ""
+    },
+    {
+      "key": "idImplante",
+      "value": ""
+    },
+    {
+      "key": "idLimpieza",
+      "value": ""
+    },
+    {
+      "key": "idPlanSofia",
+      "value": ""
+    },
+    {
+      "key": "idSofia",
+      "value": ""
+    },
+    {
+      "key": "historialSofia",
+      "value": ""
+    },
+    {
+      "key": "idCitaSofia",
+      "value": ""
+    },
+    {
+      "key": "clientesConCita",
+      "value": ""
+    },
+    {
+      "key": "idPacienteSinCita",
+      "value": ""
+    },
+    {
+      "key": "idPlanCitaPendiente",
+      "value": ""
+    },
+    {
+      "key": "idCitaPendiente",
+      "value": ""
+    },
+    {
+      "key": "idLlamada",
+      "value": ""
+    },
+    {
+      "key": "idPlanLimpieza",
+      "value": ""
+    },
+    {
+      "key": "idPlanImplanteTarde",
+      "value": ""
+    },
+    {
+      "key": "totalAntes",
+      "value": ""
+    },
+    {
+      "key": "idPlanImplante",
+      "value": ""
+    },
+    {
+      "key": "idPlanHector",
       "value": ""
     }
   ]

@@ -9,6 +9,14 @@ import { conflicto, invalido, noEncontrado, peticionMala } from '../util/errores
 import { exigirCuerpo, idDeRuta, texto } from '../util/validar.js';
 import { ABIERTAS, CERRADAS, ETAPAS, transicionPermitida } from '../util/etapas.js';
 import * as formato from '../util/formato.js';
+import { MENSAJE_EVALUACION, pacienteTieneEvaluacion, verificarEvaluacion } from '../util/reglaPropia.js';
+
+// Etapas que exigen la cita de evaluación si el plan tiene un tratamiento que la requiere
+// (sección 2.3). `perdida` no está: un plan se puede rechazar siempre (R-P7).
+const ETAPAS_CON_EVALUACION = Object.freeze(['propuesta', 'negociacion', 'ganada']);
+// Etapas en las que agregar un tratamiento que requiere evaluación exige la cita.
+// En prospecto y calificado se agrega sin cita; ganada y perdida ya dan 409 por cerrado.
+const ETAPAS_AGREGAR_CON_EVALUACION = Object.freeze(['propuesta', 'negociacion']);
 
 const MENSAJES = {
   filtroEtapa: 'El filtro etapa no es válido.',
@@ -137,7 +145,7 @@ const SQL_HISTORIAL_INSERTAR = `
 
 // Candado de toda modificación: primer paso dentro de la transacción. Pone en fila las
 // peticiones al mismo plan; la segunda lee el estado que dejó la primera (S8).
-const SQL_CANDADO = 'SELECT id, etapa FROM oportunidades WHERE id = ? AND vendedor_id = ? FOR UPDATE';
+const SQL_CANDADO = 'SELECT id, etapa, cliente_id FROM oportunidades WHERE id = ? AND vendedor_id = ? FOR UPDATE';
 
 const SQL_CAMBIAR_TITULO = 'UPDATE oportunidades SET titulo = ?, updated_at = UTC_TIMESTAMP() WHERE id = ?';
 
@@ -152,7 +160,7 @@ const SQL_CERRAR = `
    WHERE id = ?`;
 
 // Tratamientos del plan.
-const SQL_PRODUCTO_ACTIVO = 'SELECT id FROM productos WHERE id = ? AND activo = 1 LIMIT 1';
+const SQL_PRODUCTO_ACTIVO = 'SELECT id, requiere_evaluacion FROM productos WHERE id = ? AND activo = 1 LIMIT 1';
 
 const SQL_LINEA_REPETIDA =
   'SELECT id FROM oportunidad_productos WHERE oportunidad_id = ? AND producto_id = ? LIMIT 1';
@@ -176,7 +184,7 @@ const SQL_CAMBIAR_CANTIDAD = `
 const SQL_BORRAR_LINEA = 'DELETE FROM oportunidad_productos WHERE id = ? AND oportunidad_id = ?';
 
 /**
- * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa }`,
+ * Dentro de una transacción: bloquea el plan del asesor y devuelve su fila `{ id, etapa, cliente_id }`,
  * o `undefined` si no existe o es ajeno.
  */
 async function bloquearPlan(cx, id, vendedorId) {
@@ -310,7 +318,7 @@ rutasOportunidades.patch('/:id/etapa', async (req, res) => {
   let detalle;
   try {
     detalle = await transaccion(async (cx) => {
-      const { etapa: actual } = await bloquearPlanAbierto(cx, id, vendedorId);
+      const { etapa: actual, cliente_id: clienteId } = await bloquearPlanAbierto(cx, id, vendedorId);
       const nueva = cuerpo.etapa;
 
       // Saltos, retrocesos, la misma etapa o un valor que no es una etapa: 422.
@@ -331,7 +339,10 @@ rutasOportunidades.patch('/:id/etapa', async (req, res) => {
         if (motivo === null) throw invalido({ motivo_perdida: MENSAJES.motivoPerdida });
       }
 
-      // Regla propia (spec 13): si la etapa nueva es propuesta, negociacion o ganada, revisar la sección 2.3 de la especificación → 409.
+      // Regla propia (sección 2.3 de la especificación).
+      if (ETAPAS_CON_EVALUACION.includes(nueva)) {
+        await verificarEvaluacion(cx, id, clienteId);
+      }
 
       if (ABIERTAS.includes(nueva)) {
         await cx.execute(SQL_AVANZAR, [nueva, id]);
@@ -363,16 +374,19 @@ rutasOportunidades.post('/:id/productos', async (req, res) => {
   let detalle;
   try {
     detalle = await transaccion(async (cx) => {
-      await bloquearPlanAbierto(cx, id, vendedorId);
+      const plan = await bloquearPlanAbierto(cx, id, vendedorId);
 
       // Todos los errores juntos en un solo 422.
       const errores = {};
       const productoId = cuerpo.producto_id;
+      let requiereEvaluacion = false;
       if (!esEnteroPositivo(productoId)) {
         errores.producto_id = MENSAJES.productoId;
       } else {
         const [activos] = await cx.execute(SQL_PRODUCTO_ACTIVO, [productoId]);
         if (activos.length === 0) errores.producto_id = MENSAJES.productoId;
+        // MySQL lo entrega como 0 o 1.
+        else requiereEvaluacion = Boolean(activos[0].requiere_evaluacion);
       }
       const cantidad = cuerpo.cantidad;
       if (!esCantidadValida(cantidad)) errores.cantidad = MENSAJES.cantidad;
@@ -381,7 +395,14 @@ rutasOportunidades.post('/:id/productos', async (req, res) => {
       const [repetidas] = await cx.execute(SQL_LINEA_REPETIDA, [id, productoId]);
       if (repetidas.length > 0) throw conflicto(MENSAJES.repetido);
 
-      // Regla propia (spec 13): si el producto requiere evaluación y el plan está en propuesta o negociacion, revisar la sección 2.3 → 409.
+      // Regla propia (sección 2.3 de la especificación).
+      if (
+        requiereEvaluacion &&
+        ETAPAS_AGREGAR_CON_EVALUACION.includes(plan.etapa) &&
+        !(await pacienteTieneEvaluacion(cx, plan.cliente_id))
+      ) {
+        throw conflicto(MENSAJE_EVALUACION);
+      }
 
       const [resultado] = await cx.execute(SQL_INSERTAR_LINEA, [id, cantidad, productoId]);
       // El producto se desactivó entre la validación y el INSERT: no se insertó nada.
